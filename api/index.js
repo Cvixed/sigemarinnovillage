@@ -26,21 +26,34 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 // ==========================================
 // 1. STRATEGI KONEKSI DB (ANTI-CRASH VERCEL)
 // ==========================================
+// ... import dan config di atas biarkan ...
+
 let isConnected = false;
 
 const connectDB = async () => {
-    if (isConnected) return;
+    // 1. Jika sudah konek, langsung return (pakai cache)
+    if (isConnected) {
+        console.log("Using existing connection");
+        return;
+    }
+
     try {
-        if (!MONGO_URI) throw new Error("MONGO_URI tidak ditemukan di Environment Variables!");
-        await mongoose.connect(MONGO_URI, {
-            bufferCommands: false, // Penting buat Serverless agar tidak buffering request
+        if (!MONGO_URI) throw new Error("MONGO_URI is missing");
+
+        // 2. Konek baru dengan bufferCommands: TRUE
+        const db = await mongoose.connect(MONGO_URI, {
+            bufferCommands: true, // Ubah jadi TRUE agar request 'ngantri' sampai DB siap
+            serverSelectionTimeoutMS: 5000, // Timeout 5 detik jika DB down
         });
-        isConnected = true;
+
+        isConnected = db.connections[0].readyState;
         console.log("✅ MongoDB Connected");
     } catch (err) {
         console.error("❌ MongoDB Error:", err.message);
+        // Jangan throw error di sini, biarkan endpoint yang menanganinya
     }
 };
+
 
 // Middleware: Pastikan DB Konek sebelum memproses request apapun
 app.use(async (req, res, next) => {
