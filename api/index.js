@@ -41,6 +41,9 @@ app.get('/api/setup-db', async (req, res) => {
             nik VARCHAR(50),
             otp VARCHAR(10),
             otp_expires BIGINT,
+            dob VARCHAR(50),
+            bio TEXT,
+            avatar TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );`;
 
@@ -59,6 +62,7 @@ app.get('/api/setup-db', async (req, res) => {
             title TEXT,
             content TEXT,
             image TEXT,
+            date VARCHAR(50),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );`;
 
@@ -71,6 +75,8 @@ app.get('/api/setup-db', async (req, res) => {
 // ==========================================
 // 2. LOGIC AI & HELPERS
 // ==========================================
+
+// AI Setup (Safe Init)
 let model, modelText;
 try {
     if(GEN_AI_KEY) {
@@ -84,6 +90,17 @@ const mailTransporter = nodemailer.createTransport({
     service: 'gmail',
     auth: { user: EMAIL_USER, pass: EMAIL_PASS }
 });
+
+const IMAGE_MAP = {
+    'rokok': 'https://cdn-icons-png.flaticon.com/512/6122/6122662.png',
+    'nutrisi': 'https://cdn-icons-png.flaticon.com/512/706/706195.png',
+    'susu': 'https://cdn-icons-png.flaticon.com/512/9708/9708399.png',
+    'dokter': 'https://cdn-icons-png.flaticon.com/512/3063/3063176.png',
+    'sanitasi': 'https://cdn-icons-png.flaticon.com/512/2954/2954888.png',
+    'tidur': 'https://cdn-icons-png.flaticon.com/512/3094/3094833.png',
+    'stimulasi': 'https://cdn-icons-png.flaticon.com/512/3082/3082342.png',
+    'default': 'https://cdn-icons-png.flaticon.com/512/10338/10338575.png'
+};
 
 // WHO Logic
 const getStdWHO = (umur, type) => {
@@ -136,19 +153,23 @@ const processFullDiagnosis = (body) => {
         ...body,
         berat, tinggi, lk,
         status: finalStatus,
-        analysis: { berat: dBerat, tinggi: dTinggi, lk: dLk }
+        analysis: { 
+            berat: { ...dBerat, status: dBerat.label }, 
+            tinggi: { ...dTinggi, status: dTinggi.label }, 
+            lk: { ...dLk, status: dLk.label } 
+        }
     };
 };
 
 // ==========================================
-// 3. API ROUTES (SQL VERSION)
+// 3. API ROUTES (POSTGRES + LOGIKA LENGKAP)
 // ==========================================
 
 app.get('/api/health', (req, res) => {
     res.json({ status: 'OK', db: 'Vercel Postgres (Ready)' });
 });
 
-// AUTH LOGIN
+// --- AUTH LOGIN ---
 app.post('/api/login', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -166,7 +187,7 @@ app.post('/api/login', async (req, res) => {
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// AUTH REGISTER
+// --- AUTH REGISTER ---
 app.post('/api/register', async (req, res) => {
     try {
         const { username, password, email, fullName, nik, phone, role } = req.body;
@@ -183,7 +204,7 @@ app.post('/api/register', async (req, res) => {
     }
 });
 
-// GOOGLE AUTH
+// --- GOOGLE AUTH ---
 app.post('/api/auth/google', async (req, res) => {
     try {
         const { token } = req.body;
@@ -201,7 +222,32 @@ app.post('/api/auth/google', async (req, res) => {
     } catch (error) { res.status(401).json({ message: "Token Google Invalid" }); }
 });
 
-// IOT DATA (GET)
+// --- FORGOT PASSWORD ---
+app.post('/api/forgot-password', async (req, res) => {
+    try {
+        const { email } = req.body;
+        const { rows } = await sql`SELECT * FROM users WHERE email = ${email}`;
+        
+        if (rows.length === 0) return res.status(404).json({ message: "Email tidak terdaftar" });
+        const user = rows[0];
+
+        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpExpires = Date.now() + 300000; 
+
+        await sql`UPDATE users SET otp = ${otpCode}, otp_expires = ${otpExpires} WHERE id = ${user.id}`;
+
+        const mailOptions = {
+            from: `"SiGemar Admin" <${EMAIL_USER}>`,
+            to: email,
+            subject: 'KODE OTP RESET PASSWORD',
+            html: `<h3>Kode OTP Anda: ${otpCode}</h3>`
+        };
+        await mailTransporter.sendMail(mailOptions);
+        res.json({ message: "OTP Terkirim ke Email" });
+    } catch (err) { res.status(500).json({ message: "Gagal kirim email" }); }
+});
+
+// --- IOT DATA (GET) ---
 app.get('/api/iot-data', async (req, res) => {
     try {
         // Ambil JSONB dan kembalikan sebagai object biasa
@@ -212,7 +258,7 @@ app.get('/api/iot-data', async (req, res) => {
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// IOT DATA (POST)
+// --- IOT DATA (POST) ---
 app.post('/api/iot-data', async (req, res) => {
     try {
         const processed = processFullDiagnosis(req.body);
@@ -220,7 +266,8 @@ app.post('/api/iot-data', async (req, res) => {
             ...processed, 
             id: Date.now(), // Generate ID manual untuk FE
             idRegistrasi: `REG-${Date.now()}`,
-            waktuSubmit: new Date().toLocaleString('id-ID')
+            waktuSubmit: new Date().toLocaleString('id-ID'),
+            jam: new Date().toLocaleTimeString('id-ID')
         };
         
         // Simpan sebagai JSONB
@@ -233,7 +280,29 @@ app.post('/api/iot-data', async (req, res) => {
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// DELETE
+// --- IOT DATA (UPDATE) ---
+app.put('/api/iot-data/:id', async (req, res) => {
+    try {
+        const idToUpdate = parseInt(req.params.id);
+        
+        // Cari data lama dulu (karena ini JSONB, kita ambil isi datanya)
+        const { rows } = await sql`SELECT data_full FROM iot_data WHERE (data_full->>'id')::numeric = ${idToUpdate}`;
+        if (rows.length === 0) return res.status(404).json({ message: "Data tak ditemukan" });
+        
+        const oldData = rows[0].data_full;
+        const mergedBody = { ...oldData, ...req.body };
+        
+        // Proses ulang diagnosa
+        const processedData = processFullDiagnosis(mergedBody);
+
+        // Update ke database
+        await sql`UPDATE iot_data SET data_full = ${processedData} WHERE (data_full->>'id')::numeric = ${idToUpdate}`;
+        
+        res.json({ message: "Data Berhasil Diupdate" });
+    } catch (err) { res.status(500).json({ message: "Gagal Update" }); }
+});
+
+// --- IOT DATA (DELETE) ---
 app.delete('/api/iot-data/:id', async (req, res) => {
     try {
         const idToDelete = parseInt(req.params.id);
@@ -242,7 +311,7 @@ app.delete('/api/iot-data/:id', async (req, res) => {
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// ARTICLES (GET)
+// --- ARTICLES (GET) ---
 app.get('/api/articles', async (req, res) => {
     try {
         const { rows } = await sql`SELECT * FROM articles ORDER BY id DESC`;
@@ -250,8 +319,116 @@ app.get('/api/articles', async (req, res) => {
     } catch (err) { res.json([]); } 
 });
 
+// --- ARTICLES (POST) ---
+app.post('/api/articles', async (req, res) => {
+    try {
+        const { title, content, image } = req.body;
+        const date = new Date().toISOString().split('T')[0];
+        await sql`INSERT INTO articles (title, content, image, date) VALUES (${title}, ${content}, ${image}, ${date})`;
+        res.json({ message: "Artikel Diposting" });
+    } catch (err) { res.status(500).json({ message: "Gagal Posting" }); }
+});
+
+// --- ARTICLES (DELETE) ---
+app.delete('/api/articles/:id', async (req, res) => {
+    try {
+        const idToDelete = parseInt(req.params.id);
+        await sql`DELETE FROM articles WHERE id = ${idToDelete}`;
+        res.json({ message: "Artikel Dihapus" });
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// --- PROFILE UPDATE ---
+app.put('/api/profile', async (req, res) => {
+    try {
+        const { username, ...updateData } = req.body;
+        
+        // Kita build query update dinamis
+        // (Sederhananya untuk SQL statis, kita update field umum saja)
+        await sql`
+            UPDATE users SET 
+            full_name = ${updateData.fullName}, 
+            email = ${updateData.email},
+            phone = ${updateData.phone},
+            nik = ${updateData.nik},
+            bio = ${updateData.bio},
+            dob = ${updateData.dob},
+            avatar = ${updateData.avatar}
+            WHERE username = ${username}
+        `;
+
+        // Ambil data terbaru untuk dikembalikan ke FE
+        const { rows } = await sql`SELECT * FROM users WHERE username = ${username}`;
+        const updatedUser = rows[0];
+
+        res.json({ message: "Profil Diupdate", user: { username: updatedUser.username, role: updatedUser.role, fullName: updatedUser.full_name, nik: updatedUser.nik } });
+    } catch (err) { res.status(500).json({ message: "Gagal Update Profile" }); }
+});
+
 // ==========================================
-// 4. EXPORT UNTUK VERCEL (PENTING!)
+// 4. AI FEATURES (UTUH KEMBALI)
+// ==========================================
+
+app.post('/api/consult-ai', async (req, res) => {
+    const { childData, nakesNotes } = req.body;
+    try {
+        const dBerat = analyzeMetric(childData.berat, childData.umur, 'berat');
+        const dTinggi = analyzeMetric(childData.tinggi, childData.umur, 'tinggi');
+        
+        const promptText = `
+           Bertindaklah sebagai Dokter Spesialis Anak.
+           PROFIL: ${childData.nama} (${childData.umur} bln). Keluhan: "${nakesNotes}"
+           ANALISIS: BB=${childData.berat}kg (${dBerat.label}), TB=${childData.tinggi}cm (${dTinggi.label}).
+           
+           OUTPUT JSON ONLY:
+           {
+               "analisis": "Narasi medis...",
+               "faktor_risiko": ["Risiko 1", "Risiko 2"],
+               "preventif": [ {"teks": "...", "kategori": "nutrisi"} ],
+               "represif": [ {"teks": "...", "kategori": "dokter"} ],
+               "roadmap": [ { "fase": "...", "target": "...", "kegiatan": { "nutrisi": [], "stimulasi": [], "medis": "" } } ]
+           }`;
+
+        const result = await model.generateContent(promptText);
+        let text = result.response.text().replace(/```json|```/g, '').trim();
+        const jsonResult = JSON.parse(text);
+        
+        const mapImg = (arr) => arr ? arr.map(item => ({ ...item, image: IMAGE_MAP[item.kategori] || IMAGE_MAP['default'] })) : [];
+        if (jsonResult.preventif) jsonResult.preventif = mapImg(jsonResult.preventif);
+        if (jsonResult.represif) jsonResult.represif = mapImg(jsonResult.represif);
+
+        res.json({ reply: JSON.stringify(jsonResult) });
+    } catch (error) {
+        res.status(500).json({ reply: JSON.stringify({ analisis: "Gagal analisis AI.", preventif: [], represif: [] }) });
+    }
+});
+
+app.post('/api/chat-bot', async (req, res) => {
+    const { childData, question } = req.body;
+    try {
+        const prompt = `
+        Bertindaklah sebagai 'SiGemar Bot', asisten kesehatan anak posyandu yang ramah.
+        DATA ANAK: ${childData.nama}, Umur ${childData.umur} bln, Status ${childData.status}.
+        PERTANYAAN: "${question}"
+        Jawab singkat, padat, ramah.
+        `;
+        const result = await modelText.generateContent(prompt);
+        res.json({ reply: result.response.text() });
+    } catch (e) { res.status(500).json({ reply: "Maaf error." }); }
+});
+
+app.post('/api/generate-article', async (req, res) => {
+     const { topic } = req.body;
+     try {
+         const prompt = `Buat artikel JSON tentang ${topic}. Format: { "title": "Judul...", "content": "Isi..." }`;
+         const result = await modelText.generateContent(prompt);
+         const text = result.response.text().replace(/```json|```/g, '').trim();
+         res.json(JSON.parse(text));
+     } catch (e) { res.status(500).json({ message: "Error" }); }
+});
+
+// ==========================================
+// 5. EXPORT UNTUK VERCEL (PENTING!)
 // ==========================================
 if (process.env.NODE_ENV !== 'production') {
     app.listen(PORT, () => console.log(`🚀 Server running locally on port ${PORT}`));
