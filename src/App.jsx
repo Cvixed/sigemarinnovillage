@@ -7,14 +7,12 @@ import {
 } from 'lucide-react';
 import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google';
 import 'leaflet/dist/leaflet.css';
-import { MapContainer, TileLayer, Marker, Popup} from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Tooltip as LeafletTooltip } from 'react-leaflet';
 import L from 'leaflet';
 
 // --- KONFIGURASI API (DARI .ENV) ---
 // Logika: Jika Production (Vercel), pakai '/api'. Jika Local, ambil dari .env
-const API_URL = import.meta.env.PROD 
-  ? '/api' 
-  : (import.meta.env.VITE_API_URL_LOCAL || 'http://localhost:3000/api');
+const API_URL = '/api';
 
 // --- GOOGLE CLIENT ID (DARI .ENV) ---
 // Mengambil nilai dari file .env
@@ -33,6 +31,29 @@ const iconNormal = new L.DivIcon({
 });
 
 // --- HELPER UI ---
+const hitungUmurDetail = (tanggalLahir) => {
+    if (!tanggalLahir) return { tahun: 0, bulan: 0, hari: 0, bulanTotal: 0, text: "0 tahun 0 bulan 0 hari" };
+    const lahir = new Date(tanggalLahir);
+    const sekarang = new Date();
+    
+    let tahun = sekarang.getFullYear() - lahir.getFullYear();
+    let bulan = sekarang.getMonth() - lahir.getMonth();
+    let hari = sekarang.getDate() - lahir.getDate();
+
+    if (hari < 0) {
+        bulan--;
+        const bulanLalu = new Date(sekarang.getFullYear(), sekarang.getMonth(), 0).getDate();
+        hari += bulanLalu;
+    }
+    if (bulan < 0) {
+        tahun--;
+        bulan += 12;
+    }
+
+    const bulanTotal = (tahun * 12) + bulan;
+    return { tahun, bulan, hari, bulanTotal, text: `${tahun} tahun ${bulan} bulan ${hari} hari` };
+};
+
 const getRoleColor = (role) => {
     switch(role) { case 'superadmin': return 'text-orange-600 bg-orange-100'; case 'kades': return 'text-blue-900 bg-blue-100'; case 'nakes': return 'text-emerald-600 bg-emerald-100'; case 'ortu': return 'text-blue-600 bg-blue-50'; default: return 'text-gray-600 bg-gray-100'; }
 };
@@ -72,10 +93,10 @@ const getMetricUI = (analysisData) => {
 };
 
 // --- UI COMPONENTS ---
-const InputField = ({ label, name, value, onChange, type="text", placeholder, className, ...props }) => (
+const InputField = ({ label, name, value, onChange, type="text", placeholder, className, disabled, ...props }) => (
     <div className="flex flex-col gap-2 mb-4 w-full relative">
         {label && <label className="text-xs text-blue-900 font-bold uppercase tracking-wider ml-1">{label}</label>}
-        <input className={`w-full bg-white border border-gray-300 text-gray-700 text-sm rounded-xl px-4 py-3.5 focus:ring-2 focus:ring-orange-500 outline-none transition-all shadow-sm ${className}`} name={name} value={value || ''} onChange={onChange} type={type} placeholder={placeholder} {...props} />
+        <input className={`w-full bg-white border border-gray-300 text-gray-700 text-sm rounded-xl px-4 py-3.5 focus:ring-2 focus:ring-orange-500 outline-none transition-all shadow-sm ${disabled ? 'bg-gray-100 cursor-not-allowed opacity-70' : ''} ${className}`} name={name} value={value || ''} onChange={onChange} type={type} placeholder={placeholder} disabled={disabled} {...props} />
     </div>
 );
 const SelectField = ({ label, name, value, onChange, children, disabled }) => (
@@ -90,6 +111,61 @@ const TextAreaField = ({ label, name, value, onChange, placeholder }) => (
         <textarea className="w-full bg-white border border-gray-300 text-gray-700 text-sm rounded-xl px-4 py-3.5 focus:ring-2 focus:ring-orange-500 outline-none transition-all min-h-[120px] shadow-sm" name={name} value={value || ''} onChange={onChange} placeholder={placeholder} />
     </div>
 );
+
+const SearchableSelect = ({ label, name, value, onChange, options, disabled }) => {
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isOpen, setIsOpen] = useState(false);
+    const wrapperRef = useRef(null);
+
+    useEffect(() => {
+        function handleClickOutside(event) {
+            if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    useEffect(() => {
+        if (value && options) {
+            const selected = options.find(opt => String(opt.id) === String(value));
+            if (selected) setSearchTerm(selected.name);
+        } else if (!value) {
+            setSearchTerm('');
+        }
+    }, [value, options]);
+
+    const filteredOptions = options ? options.filter(opt => 
+        opt.name.toLowerCase().includes(searchTerm.toLowerCase())
+    ) : [];
+
+    const handleSelect = (opt) => {
+        onChange({ target: { name, value: opt.id } });
+        setSearchTerm(opt.name);
+        setIsOpen(false);
+    };
+
+    return (
+        <div className="flex flex-col gap-2 mb-4 w-full relative" ref={wrapperRef}>
+            {label && <label className="text-xs text-blue-900 font-bold uppercase tracking-wider ml-1">{label}</label>}
+            <div className="relative">
+                <input className={`w-full bg-white border border-gray-300 text-gray-700 text-sm rounded-xl px-4 py-3.5 focus:ring-2 focus:ring-orange-500 outline-none transition-all shadow-sm ${disabled ? 'bg-gray-100 cursor-not-allowed opacity-70' : ''}`} placeholder={disabled ? "Pilih..." : `Cari ${label}...`} value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setIsOpen(true); }} onFocus={() => !disabled && setIsOpen(true)} disabled={disabled} />
+                {isOpen && !disabled && filteredOptions.length > 0 && (
+                    <div className="absolute z-50 w-full bg-white border border-gray-200 mt-1 rounded-xl shadow-xl max-h-60 overflow-y-auto custom-scrollbar">
+                        {filteredOptions.map(opt => (
+                            <div key={opt.id} onClick={() => handleSelect(opt)} className="px-4 py-3 hover:bg-orange-50 cursor-pointer text-sm text-gray-700 border-b border-gray-50 last:border-none">{opt.name}</div>
+                        ))}
+                    </div>
+                )}
+                {isOpen && !disabled && filteredOptions.length === 0 && (
+                    <div className="absolute z-50 w-full bg-white border border-gray-200 mt-1 rounded-xl shadow-xl p-4 text-center text-gray-500 text-sm">Tidak ditemukan</div>
+                )}
+            </div>
+        </div>
+    );
+};
+
 // ... (SearchableSelect, Toast, StatusBadge Components tetap sama, tidak berubah visualnya) ...
 // SAYA PERSINGKAT UNTUK MEMFOKUSKAN KE PERUBAHAN LOGIKA
 
@@ -260,13 +336,14 @@ const Sidebar = ({ userRole, activePage, setActivePage, onLogout, setRegisterMod
             >
                 {/* Header Sidebar */}
                 <div className={`h-20 flex items-center px-6 border-b border-slate-800 shrink-0 transition-all duration-300 ${isExpanded || isMobileOpen ? 'justify-between' : 'justify-center'}`}>
-                    <div className="h-20 w-full flex items-center justify-center border-b border-slate-800 shrink-0 transition-all duration-300">
-    <img 
-        src="SiGemar.png" 
-        className="h-38 w-auto object-contain" 
-        alt="Logo" 
-    />
-</div>
+                    <div className="flex items-center gap-3">
+                        <img src="SiGemar.png" className="h-10 w-auto object-contain" alt="Logo" />
+                        <div className={`overflow-hidden whitespace-nowrap transition-all duration-300 ${isExpanded || isMobileOpen ? 'w-auto opacity-100' : 'w-0 opacity-0'}`}>
+                            <h1 className="font-black text-xl tracking-tight leading-none">
+                                <span className="text-orange-500">Si</span>Gemar
+                            </h1>
+                        </div>
+                    </div>
 
                     {/* TOMBOL SILANG (X) - Hanya Muncul di Mobile */}
                     <button onClick={() => setIsMobileOpen(false)} className="md:hidden text-slate-400 hover:text-white p-1">
@@ -1734,9 +1811,9 @@ const StuntingMap = ({ data }) => {
                                 </div>
                             </div>
                         </Popup>
-                        <Tooltip direction="top" offset={[0, -20]} opacity={1}>
+                        <LeafletTooltip direction="top" offset={[0, -20]} opacity={1}>
                             {pasien.nama || pasien.namaAnak}
-                        </Tooltip>
+                        </LeafletTooltip>
                     </Marker>
                 );
             })}
