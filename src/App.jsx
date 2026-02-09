@@ -16,7 +16,7 @@ const API_URL = '/api';
 
 // --- GOOGLE CLIENT ID (DARI .ENV) ---
 // Mengambil nilai dari file .env
-const GOOGLE_CLIENT_ID = import.meta.env.GOOGLE_CLIENT_ID;
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
 // --- KONFIGURASI ICON MARKER ---
 const iconStunting = new L.DivIcon({
