@@ -1,44 +1,60 @@
 import express from 'express';
 import cors from 'cors';
 import bodyParser from 'body-parser';
-import mongoose from 'mongoose'; // <--- PENGGANTI FS
+import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-// [SDK LATEST] Menggunakan library resmi Google Generative AI
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import nodemailer from 'nodemailer';
-import { OAuth2Client } from 'google-auth-library';
 import axios from 'axios';
 
-// Load variabel dari file .env (untuk keamanan)
+// Load variables
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ==========================================
-// 1. KONFIGURASI DAN KONEKSI DATABASE
-// ==========================================
+// --- CONFIG ---
+const MONGO_URI = process.env.MONGO_URI;
+const GEN_AI_KEY = process.env.GEN_AI_KEY;
+const EMAIL_USER = process.env.EMAIL_USER;
+const EMAIL_PASS = process.env.EMAIL_PASS;
 
-// Ambil dari Environment Variables (Biar aman pas deploy)
-// Jika di local tidak ada .env, dia pakai nilai default (String sebelah kanan || )
-const MONGO_URI = process.env.MONGO_URI || "MASUKKAN_CONNECTION_STRING_MONGODB_ANDA_DISINI";
-const GEN_AI_KEY = process.env.GEN_AI_KEY || "AIzaSyD9C9tLiHo5ItMwvZtibTXowSgLT3DODMs"; 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "CLIENT_ID_GOOGLE_ANDA";
-const EMAIL_USER = process.env.EMAIL_USER || "sigemar.official@gmail.com";
-const EMAIL_PASS = process.env.EMAIL_PASS || "APP_PASSWORD_EMAIL_ANDA";
-
-// KONEKSI KE MONGODB ATLAS
-mongoose.connect(MONGO_URI)
-  .then(() => console.log("✅ Berhasil Konek ke MongoDB Atlas"))
-  .catch(err => console.error("❌ Gagal Konek MongoDB:", err));
+app.use(cors());
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
 
 // ==========================================
-// 2. MEMBUAT SKEMA DATA (PENGGANTI DATABASE.JSON)
+// 1. STRATEGI KONEKSI DB (ANTI-CRASH VERCEL)
 // ==========================================
+let isConnected = false;
 
-// Schema User (Sesuai database.json Anda)
+const connectDB = async () => {
+    if (isConnected) return;
+    try {
+        if (!MONGO_URI) throw new Error("MONGO_URI tidak ditemukan di Environment Variables!");
+        await mongoose.connect(MONGO_URI, {
+            bufferCommands: false, // Penting buat Serverless agar tidak buffering request
+        });
+        isConnected = true;
+        console.log("✅ MongoDB Connected");
+    } catch (err) {
+        console.error("❌ MongoDB Error:", err.message);
+    }
+};
+
+// Middleware: Pastikan DB Konek sebelum memproses request apapun
+app.use(async (req, res, next) => {
+    await connectDB();
+    next();
+});
+
+// ==========================================
+// 2. SCHEMA DEFINITION (DENGAN PENGECEKAN MODEL)
+// ==========================================
+// PENTING: Pakai 'mongoose.models.Nama || ...' agar tidak error saat Vercel restart
+
 const userSchema = new mongoose.Schema({
-    id: { type: Number, default: () => Date.now() }, // Pakai angka biar Frontend React tidak error
+    id: { type: Number, default: () => Date.now() },
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     role: { type: String, default: 'ortu' },
@@ -54,26 +70,26 @@ const userSchema = new mongoose.Schema({
     otpExpires: Date
 });
 
-// Schema Data Pasien / IoT (Sesuai database.json Anda)
 const iotDataSchema = new mongoose.Schema({
     id: { type: Number, default: () => Date.now() },
     idRegistrasi: String,
-    // Data Orang Tua
-    statusAyah: String, namaAyah: String, nikAyah: String,
-    statusIbu: String, namaIbu: String, nikIbu: String,
-    // Data Anak
-    nama: String, nik: String, tglLahir: String, jk: String,
-    alamat: String, posyandu: String,
-    // Data Medis
-    berat: Number, tinggi: Number, lk: Number, umur: Number,
+    statusAyah: String, namaAyah: String, nikAyah: String, hpAyah: String,
+    statusIbu: String, namaIbu: String, nikIbu: String, hpIbu: String,
+    nama: String, nikAnak: String, gender: String, 
+    tempatLahir: String, tglLahir: String, umur: Number,
+    namaPanggilan: String, golDarah: String, agama: String,
+    alamat: String, rt: String, rw: String,
+    provinsi: String, kota: String, kecamatan: String, kelurahan: String, dusun: String,
+    kodePos: String, email: String, pendapatan: String, sumberInfo: String, catatan: String,
+    berat: Number, tinggi: Number, lk: Number,
     waktuSubmit: String, jam: String,
     statusRegistrasi: { type: String, default: 'Baru' },
-    medisNotes: String,
-    status: String, // Normal, Stunting, dll
-    analysis: Object // Menyimpan hasil { berat: {}, tinggi: {} }
-}, { timestamps: true }); // Otomatis catat created_at
+    medisNotes: Object,
+    status: String,
+    analysis: Object,
+    latitude: Number, longitude: Number
+}, { timestamps: true });
 
-// Schema Artikel
 const articleSchema = new mongoose.Schema({
     id: { type: Number, default: () => Date.now() },
     title: String,
@@ -82,23 +98,24 @@ const articleSchema = new mongoose.Schema({
     date: String
 });
 
-// Membuat Model (Tabel)
-const User = mongoose.model('User', userSchema);
-const IoTData = mongoose.model('IoTData', iotDataSchema);
-const Article = mongoose.model('Article', articleSchema);
+// Fix: Cek dulu apakah model sudah ada
+const User = mongoose.models.User || mongoose.model('User', userSchema);
+const IoTData = mongoose.models.IoTData || mongoose.model('IoTData', iotDataSchema);
+const Article = mongoose.models.Article || mongoose.model('Article', articleSchema);
 
 // ==========================================
-// 3. INISIALISASI AI & EMAIL
+// 3. LOGIC & AI SETUP
 // ==========================================
 
-const genAI = new GoogleGenerativeAI(GEN_AI_KEY);
-
-// Model AI
-const model = genAI.getGenerativeModel({ 
-    model: "gemini-flash-latest",
-    generationConfig: { responseMimeType: "application/json" }
-});
-const modelText = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+// AI Setup (Safe Init)
+let model, modelText;
+try {
+    if(GEN_AI_KEY) {
+        const genAI = new GoogleGenerativeAI(GEN_AI_KEY);
+        model = genAI.getGenerativeModel({ model: "gemini-flash-latest", generationConfig: { responseMimeType: "application/json" }});
+        modelText = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
+    }
+} catch (e) { console.log("AI Config Error:", e); }
 
 // Email Transporter
 const mailTransporter = nodemailer.createTransport({
@@ -106,11 +123,6 @@ const mailTransporter = nodemailer.createTransport({
     auth: { user: EMAIL_USER, pass: EMAIL_PASS }
 });
 
-app.use(cors());
-app.use(bodyParser.json({ limit: '50mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
-
-// Database Gambar Statis (Tetap di kode karena kecil)
 const IMAGE_MAP = {
     'rokok': 'https://cdn-icons-png.flaticon.com/512/6122/6122662.png',
     'nutrisi': 'https://cdn-icons-png.flaticon.com/512/706/706195.png',
@@ -122,11 +134,7 @@ const IMAGE_MAP = {
     'default': 'https://cdn-icons-png.flaticon.com/512/10338/10338575.png'
 };
 
-// ==========================================
-// 4. LOGIC PERHITUNGAN GIZI (CORE SYSTEM)
-// ==========================================
-// (Bagian ini TIDAK BERUBAH dari kode asli Anda)
-
+// --- LOGIC PERHITUNGAN GIZI (DIKEMBALIKAN UTUH) ---
 const getStdWHO = (umur, type) => {
     const u = parseInt(umur) || 0;
     if (type === 'berat') return 3.2 + (u * 0.5);
@@ -210,43 +218,36 @@ const processFullDiagnosis = (body) => {
 };
 
 // ==========================================
-// 5. API ROUTES (SUDAH DIUBAH KE MONGODB)
+// 4. API ROUTES
 // ==========================================
 
-// --- AUTH: LOGIN ---
+// Check Health
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'OK', db: isConnected ? 'Connected' : 'Connecting...' });
+});
+
+// --- AUTH ---
 app.post('/api/login', async (req, res) => {
     try {
         const { username, password } = req.body;
-        // Mongoose: Cari satu user
         const user = await User.findOne({ username });
-        
-        if (!user || user.password !== password) {
-            return res.status(401).json({ message: "Login Gagal" });
-        }
-        res.json({ message: "Login Sukses", user: { 
-            username: user.username, role: user.role, nik: user.nik, fullName: user.fullName 
-        }});
+        if (!user || user.password !== password) return res.status(401).json({ message: "Login Gagal" });
+        res.json({ message: "Login Sukses", user: { username: user.username, role: user.role, nik: user.nik, fullName: user.fullName }});
     } catch (err) { res.status(500).json({ message: "Error Server" }); }
 });
 
-// --- AUTH: REGISTER ---
 app.post('/api/register', async (req, res) => {
     try {
-        const { username, password, role, nik, fullName, email, phone, dob } = req.body;
-        
-        // Cek duplikat
+        const { username, email } = req.body;
         const existing = await User.findOne({ $or: [{ username }, { email }] });
-        if (existing) return res.status(400).json({ message: "Username atau Email sudah dipakai" });
-
-        // Simpan User Baru
-        const newUser = new User({ username, password, role, nik, fullName, email, phone, dob });
-        await newUser.save();
+        if (existing) return res.status(400).json({ message: "Username/Email sudah dipakai" });
         
+        const newUser = new User(req.body);
+        await newUser.save();
         res.json({ message: "Registrasi Berhasil" });
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// --- AUTH: GOOGLE ---
 app.post('/api/auth/google', async (req, res) => {
     try {
         const { token } = req.body;
@@ -254,8 +255,6 @@ app.post('/api/auth/google', async (req, res) => {
             headers: { Authorization: `Bearer ${token}` }
         });
         const { email, name, picture } = googleResponse.data;
-
-        // Cek User di DB
         const user = await User.findOne({ email });
 
         if (user) {
@@ -264,15 +263,13 @@ app.post('/api/auth/google', async (req, res) => {
             res.json({ 
                 status: 'register_needed', 
                 message: "Silakan lengkapi NIK",
-                googleData: { 
-                    email, fullName: name, username: email.split('@')[0], avatar: picture 
-                }
+                googleData: { email, fullName: name, username: email.split('@')[0], avatar: picture }
             });
         }
     } catch (error) { res.status(401).json({ message: "Token Google Invalid" }); }
 });
 
-// --- AUTH: FORGOT PASSWORD (OTP) ---
+// --- FORGOT PASSWORD ---
 app.post('/api/forgot-password', async (req, res) => {
     try {
         const { email } = req.body;
@@ -281,32 +278,29 @@ app.post('/api/forgot-password', async (req, res) => {
 
         const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
         user.otp = otpCode; 
-        user.otpExpires = Date.now() + 300000; // 5 Menit
+        user.otpExpires = Date.now() + 300000; 
         await user.save();
 
         const mailOptions = {
             from: `"SiGemar Admin" <${EMAIL_USER}>`,
             to: email,
             subject: 'KODE OTP RESET PASSWORD',
-            html: `<h3>Kode OTP Anda: ${otpCode}</h3><p>Jangan berikan ke siapa-siapa.</p>`
+            html: `<h3>Kode OTP Anda: ${otpCode}</h3>`
         };
         await mailTransporter.sendMail(mailOptions);
         res.json({ message: "OTP Terkirim ke Email" });
     } catch (err) { res.status(500).json({ message: "Gagal kirim email" }); }
 });
 
-// --- IOT DATA: GET ALL ---
+// --- IOT DATA ---
 app.get('/api/iot-data', async (req, res) => {
-    try {
-        // Ambil semua data, urutkan dari yang terbaru (descending)
-        const data = await IoTData.find().sort({ createdAt: -1 });
-        res.json(data);
-    } catch (err) { res.json([]); }
+    try { const data = await IoTData.find().sort({ createdAt: -1 }); res.json(data); } 
+    catch (err) { res.json([]); }
 });
 
-// --- IOT DATA: ADD NEW ---
 app.post('/api/iot-data', async (req, res) => {
     try {
+        // PENTING: Logic perhitungan WHO dipanggil di sini!
         const processedData = processFullDiagnosis(req.body);
         const newData = new IoTData({
             ...processedData,
@@ -319,31 +313,26 @@ app.post('/api/iot-data', async (req, res) => {
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// --- IOT DATA: UPDATE ---
 app.put('/api/iot-data/:id', async (req, res) => {
     try {
-        // Cari data lama dulu untuk merge logic
         const oldData = await IoTData.findOne({ id: req.params.id });
         if (!oldData) return res.status(404).json({ message: "Data tak ditemukan" });
 
         const mergedBody = { ...oldData.toObject(), ...req.body };
+        // PENTING: Logic perhitungan WHO dipanggil lagi saat update!
         const processedData = processFullDiagnosis(mergedBody);
         
-        // Update berdasarkan custom 'id' (bukan _id mongo)
         await IoTData.findOneAndUpdate({ id: req.params.id }, processedData);
         res.json({ message: "Data Berhasil Diupdate" });
     } catch (err) { res.status(500).json({ message: "Gagal Update" }); }
 });
 
-// --- IOT DATA: DELETE ---
 app.delete('/api/iot-data/:id', async (req, res) => {
-    try {
-        await IoTData.findOneAndDelete({ id: req.params.id });
-        res.json({ message: "Data Berhasil Dihapus" });
-    } catch (err) { res.status(500).json({ message: "Gagal Hapus" }); }
+    try { await IoTData.findOneAndDelete({ id: req.params.id }); res.json({ message: "Hapus Sukses" }); } 
+    catch (err) { res.status(500).json({ message: "Gagal Hapus" }); }
 });
 
-// --- ARTIKEL: GET & POST & DELETE ---
+// --- ARTICLES ---
 app.get('/api/articles', async (req, res) => {
     const articles = await Article.find().sort({ id: -1 });
     res.json(articles);
@@ -351,12 +340,7 @@ app.get('/api/articles', async (req, res) => {
 
 app.post('/api/articles', async (req, res) => {
     try {
-        const { title, content, image } = req.body;
-        const newArticle = new Article({
-            title, content,
-            image: image || 'https://via.placeholder.com/400x200',
-            date: new Date().toISOString().split('T')[0]
-        });
+        const newArticle = new Article({ ...req.body, date: new Date().toISOString().split('T')[0] });
         await newArticle.save();
         res.json({ message: "Artikel Diposting", data: newArticle });
     } catch (err) { res.status(500).json({ message: "Gagal Posting" }); }
@@ -367,21 +351,16 @@ app.delete('/api/articles/:id', async (req, res) => {
     res.json({ message: "Artikel Dihapus" });
 });
 
-// --- USER PROFILE UPDATE ---
 app.put('/api/profile', async (req, res) => {
     try {
         const { username, ...updateData } = req.body;
-        const updatedUser = await User.findOneAndUpdate(
-            { username }, 
-            { $set: updateData }, 
-            { new: true } // Return data baru setelah update
-        );
+        const updatedUser = await User.findOneAndUpdate({ username }, { $set: updateData }, { new: true });
         if (!updatedUser) return res.status(404).json({ message: "User not found" });
         res.json({ message: "Profil Diupdate", user: updatedUser });
     } catch (err) { res.status(500).json({ message: "Gagal Update Profile" }); }
 });
 
-// --- FITUR AI: ANALISIS MEDIS (TETAP SAMA) ---
+// --- AI FEATURES (LOGIC DIKEMBALIKAN UTUH) ---
 app.post('/api/consult-ai', async (req, res) => {
     const { childData, nakesNotes } = req.body;
     try {
@@ -418,7 +397,6 @@ app.post('/api/consult-ai', async (req, res) => {
     }
 });
 
-// --- FITUR AI: CHATBOT ORANG TUA ---
 app.post('/api/chat-bot', async (req, res) => {
     const { childData, question } = req.body;
     try {
@@ -433,7 +411,6 @@ app.post('/api/chat-bot', async (req, res) => {
     } catch (e) { res.status(500).json({ reply: "Maaf error." }); }
 });
 
-// --- FITUR AI: GENERATE ARTICLE ---
 app.post('/api/generate-article', async (req, res) => {
      const { topic } = req.body;
      try {
@@ -448,8 +425,6 @@ app.post('/api/generate-article', async (req, res) => {
 // 6. EXPORT UNTUK VERCEL (PENTING!)
 // ==========================================
 
-// Jika dijalankan di laptop (node server.js), dia listen PORT 3000
-// Jika di Vercel, dia export 'app' biar Vercel yang urus
 if (process.env.NODE_ENV !== 'production') {
     app.listen(PORT, () => console.log(`🚀 Server running locally on port ${PORT}`));
 }
