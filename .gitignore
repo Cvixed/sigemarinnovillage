@@ -1,0 +1,23 @@
+# 1. Folder Library (Sangat Berat, jangan diupload)
+node_modules
+
+# 2. Kunci Rahasia (SANGAT PENTING - Jangan diupload!)
+.env
+.env.local
+.env.production
+
+# 3. Hasil Build (Vercel akan buat sendiri nanti)
+dist
+build
+
+# 4. File Sistem (Sampah Mac/Windows)
+.DS_Store
+Thumbs.db
+
+# 5. Log Error
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 6. Database Lokal (Jaga-jaga kalau Anda buat lagi)
+database.json
