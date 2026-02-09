@@ -12,7 +12,9 @@ import L from 'leaflet';
 
 // --- KONFIGURASI API (DARI .ENV) ---
 // Logika: Jika Production (Vercel), pakai '/api'. Jika Local, ambil dari .env
-const API_URL = '/api';
+const API_URL = import.meta.env.PROD 
+  ? '/api' 
+  : (import.meta.env.VITE_API_URL_LOCAL || 'http://localhost:3000/api');
 
 // --- GOOGLE CLIENT ID (DARI .ENV) ---
 // Mengambil nilai dari file .env
