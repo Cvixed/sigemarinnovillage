@@ -10,6 +10,10 @@ import axios from 'axios';
 dotenv.config();
 const app = express();
 
+// --- [FIX] DEFINISI PORT WAJIB ADA ---
+const PORT = process.env.PORT || 3000;
+// ------------------------------------
+
 // --- CONFIG ---
 const GEN_AI_KEY = process.env.GEN_AI_KEY;
 const EMAIL_USER = process.env.EMAIL_USER;
@@ -81,7 +85,7 @@ const mailTransporter = nodemailer.createTransport({
     auth: { user: EMAIL_USER, pass: EMAIL_PASS }
 });
 
-// WHO Logic (Sama seperti sebelumnya)
+// WHO Logic
 const getStdWHO = (umur, type) => {
     const u = parseInt(umur) || 0;
     if (type === 'berat') return 3.2 + (u * 0.5);
@@ -109,7 +113,6 @@ const analyzeMetric = (val, umur, type) => {
 };
 
 const processFullDiagnosis = (body) => {
-    // Logika proses data sama, kita bungkus hasilnya nanti
     const umur = parseInt(body.umur);
     const berat = body.berat ? parseFloat(body.berat) : 0;
     const tinggi = body.tinggi ? parseFloat(body.tinggi) : 0;
@@ -233,8 +236,6 @@ app.post('/api/iot-data', async (req, res) => {
 // DELETE
 app.delete('/api/iot-data/:id', async (req, res) => {
     try {
-        // Hapus berdasarkan isi JSON (agak tricky di SQL tapi bisa)
-        // Kita gunakan id dari parameter URL
         const idToDelete = parseInt(req.params.id);
         await sql`DELETE FROM iot_data WHERE (data_full->>'id')::numeric = ${idToDelete}`;
         res.json({ message: "Hapus Sukses" });
@@ -246,10 +247,14 @@ app.get('/api/articles', async (req, res) => {
     try {
         const { rows } = await sql`SELECT * FROM articles ORDER BY id DESC`;
         res.json(rows);
-    } catch (err) { res.json([]); } // Return kosong jika error
+    } catch (err) { res.json([]); } 
 });
 
-// Start Server
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// ==========================================
+// 4. EXPORT UNTUK VERCEL (PENTING!)
+// ==========================================
+if (process.env.NODE_ENV !== 'production') {
+    app.listen(PORT, () => console.log(`🚀 Server running locally on port ${PORT}`));
+}
 
 export default app;
