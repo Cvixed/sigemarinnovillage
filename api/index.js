@@ -4,23 +4,20 @@ import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
 import { sql } from '@vercel/postgres'; 
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import nodemailer from 'nodemailer'; // GUNAKAN IMPORT SAJA
+import nodemailer from 'nodemailer';
 import axios from 'axios';
 
 dotenv.config();
 const app = express();
 
-// Konfigurasi Transporter (Gunakan let agar bisa diupdate)
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: 'teamsigemar@gmail.com',
-        pass: 'cvow kwom spsr sjjz' 
-    }
-});
-
+// --- [FIX] DEFINISI PORT WAJIB ADA ---
 const PORT = process.env.PORT || 3000;
+// ------------------------------------
+
+// --- CONFIG ---
 const GEN_AI_KEY = process.env.GEN_AI_KEY;
+const EMAIL_USER = process.env.EMAIL_USER;
+const EMAIL_PASS = process.env.EMAIL_PASS;
 
 app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' }));
@@ -282,23 +279,13 @@ app.delete('/api/users/reject/:id', async (req, res) => {
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
+// --- [REVISI] AUTH REGISTER (api/index.js) ---
 app.post('/api/register', async (req, res) => {
     try {
         const { username, password, email, fullName, nik, phone, role } = req.body;
         
-        // 1. Validasi: Jangan izinkan data kosong masuk ke DB
-        if (!username || !password || !nik || !fullName) {
-            return res.status(400).json({ 
-                message: "Mohon lengkapi semua data wajib (Username, Password, NIK, Nama)!" 
-            });
-        }
-
-        // 2. Cek apakah user sudah ada sebelumnya
-        const existingUser = await sql`SELECT * FROM users WHERE username = ${username} OR email = ${email}`;
-        if (existingUser.rows.length > 0) {
-            return res.status(400).json({ message: "Username atau Email sudah terdaftar!" });
-        }
-
+        // --- LOGIKA OTOMATIS AKTIF UNTUK ORTU ---
+        // Jika role adalah 'ortu', status langsung 'active'. Selain itu 'pending'.
         const initialStatus = (role === 'ortu') ? 'active' : 'pending';
 
         await sql`
@@ -306,15 +293,16 @@ app.post('/api/register', async (req, res) => {
             VALUES (${username}, ${password}, ${email}, ${fullName}, ${nik}, ${phone}, ${role || 'ortu'}, ${initialStatus})
         `;
 
+        // Berikan respon yang berbeda agar user tidak bingung
         if (initialStatus === 'active') {
-            res.json({ message: "Registrasi Berhasil! Silakan login nggih Bunda/Ayah." });
+            res.json({ message: "Registrasi Berhasil! Silakan masuk." });
         } else {
             res.json({ message: "Registrasi Berhasil! Mohon tunggu persetujuan Admin untuk akses ini." });
         }
 
     } catch (err) { 
-        console.error("Register Error:", err);
-        res.status(500).json({ message: "Terjadi kesalahan pada server." }); 
+        if(err.code === '23505') return res.status(400).json({ message: "Username/Email sudah dipakai" });
+        res.status(500).json({ message: err.message }); 
     }
 });
 
@@ -336,89 +324,29 @@ app.post('/api/auth/google', async (req, res) => {
     } catch (error) { res.status(401).json({ message: "Token Google Invalid" }); }
 });
 
+// --- FORGOT PASSWORD ---
 app.post('/api/forgot-password', async (req, res) => {
-    const { email } = req.body;
     try {
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const { email } = req.body;
+        const { rows } = await sql`SELECT * FROM users WHERE email = ${email}`;
         
-        // 1. Update OTP di Database
-        const result = await sql`UPDATE users SET otp = ${otp} WHERE email = ${email}`;
+        if (rows.length === 0) return res.status(404).json({ message: "Email tidak terdaftar" });
+        const user = rows[0];
 
-        if (result.rowCount === 0) {
-            return res.status(404).json({ message: "Email tidak terdaftar nggih Bunda/Ayah!" });
-        }
+        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpExpires = Date.now() + 300000; 
 
-        // 2. Kirim Email
+        await sql`UPDATE users SET otp = ${otpCode}, otp_expires = ${otpExpires} WHERE id = ${user.id}`;
+
         const mailOptions = {
-            from: '"SiGemar Admin" <teamsigemar@gmail.com>',
+            from: `"SiGemar Admin" <${EMAIL_USER}>`,
             to: email,
-            subject: 'KODE OTP RESET PASSWORD - SIGEMAR',
-            html: `
-                <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-                    <h2 style="color: #2563eb;">Halo Bunda/Ayah!</h2>
-                    <p>Kami menerima permintaan reset password. Gunakan kode OTP di bawah ini:</p>
-                    <div style="background: #f3f4f6; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #ea580c;">
-                        ${otp}
-                    </div>
-                    <p style="font-size: 12px; color: #666; mt-4;">*Kode ini berlaku untuk sekali pakai. Jika bukan Bunda/Ayah yang meminta, abaikan saja nggih.</p>
-                </div>
-            `
+            subject: 'KODE OTP RESET PASSWORD',
+            html: `<h3>Kode OTP Anda: ${otpCode}</h3>`
         };
-
-        try {
-            await transporter.sendMail(mailOptions);
-            res.json({ message: "OTP berhasil dikirim ke email Bunda/Ayah!" });
-        } catch (mailError) {
-            // Jika email gagal tapi DB sukses, kita kasih tahu kodenya di log server
-            console.error("Gagal Kirim Email:", mailError);
-            console.log("--- MODE DARURAT ---");
-            console.log(`OTP untuk ${email} adalah: ${otp}`);
-            console.log("---------------------");
-            
-            // Berikan pesan sukses palsu ke frontend (untuk testing) agar Bunda/Ayah bisa lanjut
-            res.json({ message: "OTP dikirim (Cek log server untuk kodenya nggih!)" });
-        }
-
-    } catch (err) {
-        console.error("Full Error:", err);
-        res.status(500).json({ message: "Terjadi kesalahan sistem, mohon coba lagi." });
-    }
-});
-
-// --- [REVISI] ENDPOINT RESET PASSWORD (api/index.js) ---
-app.post('/api/reset-password', async (req, res) => {
-    const { email, otp, newPassword } = req.body;
-    
-    try {
-        // 1. Validasi Input Dasar
-        if (!email || !otp || !newPassword) {
-            return res.status(400).json({ message: "Data tidak lengkap nggih Bunda/Ayah!" });
-        }
-
-        if (newPassword.length < 5) {
-            return res.status(400).json({ message: "Password baru minimal 5 karakter ya Bunda/Ayah." });
-        }
-
-        // 2. Cari user yang email dan OTP-nya cocok
-        const { rows } = await sql`SELECT * FROM users WHERE email = ${email} AND otp = ${otp}`;
-        
-        if (rows.length === 0) {
-            // Jika OTP salah atau email tidak cocok
-            return res.status(400).json({ message: "Kode OTP salah atau sudah tidak berlaku!" });
-        }
-
-        // 3. Update password dan hapus OTP (SET otp = NULL)
-        // Ini penting agar kode OTP yang sama tidak bisa dipakai dua kali (keamanan).
-        await sql`UPDATE users SET password = ${newPassword}, otp = NULL WHERE email = ${email}`;
-        
-        console.log(`[RESET SUCCESS] Password untuk ${email} telah diperbarui.`);
-        
-        res.json({ message: "Password berhasil diperbarui! Silakan login kembali nggih." });
-
-    } catch (err) { 
-        console.error("Reset Password Error:", err);
-        res.status(500).json({ message: "Terjadi gangguan sistem saat mereset password." }); 
-    }
+        await mailTransporter.sendMail(mailOptions);
+        res.json({ message: "OTP Terkirim ke Email" });
+    } catch (err) { res.status(500).json({ message: "Gagal kirim email" }); }
 });
 
 // --- IOT DATA (GET) ---
