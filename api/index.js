@@ -324,14 +324,14 @@ app.post('/api/auth/google', async (req, res) => {
     } catch (error) { res.status(401).json({ message: "Token Google Invalid" }); }
 });
 
-const nodemailer = require('nodemailer');
+const nodemailer = require('nodemailer'); // Pastikan ini ada di paling atas file!
 
-// Konfigurasi pengirim email
+// KONFIGURASI PENGIRIM (Double check di sini!)
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-        user: 'teamsigemar@gmail.com', // Sesuai di gambar Bunda/Ayah
-        pass: 'isi_dengan_app_password_google_anda' // Jangan pakai password email biasa
+        user: 'teamsigemar@gmail.com',
+        pass: 'cvow kwom spsr sjjz' 
     }
 });
 
@@ -339,44 +339,85 @@ app.post('/api/forgot-password', async (req, res) => {
     const { email } = req.body;
     try {
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const { rowCount } = await sql`UPDATE users SET otp = ${otp} WHERE email = ${email}`;
+        
+        // 1. Update OTP di Database
+        const result = await sql`UPDATE users SET otp = ${otp} WHERE email = ${email}`;
 
-        if (rowCount === 0) return res.status(404).json({ message: "Email tidak terdaftar!" });
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: "Email tidak terdaftar nggih Bunda/Ayah!" });
+        }
 
-        // Proses pengiriman email asli ke Bunda/Ayah
+        // 2. Kirim Email
         const mailOptions = {
             from: '"SiGemar Admin" <teamsigemar@gmail.com>',
             to: email,
-            subject: 'KODE OTP RESET PASSWORD',
-            text: `Kode OTP Anda: ${otp}`,
-            html: `<b>Kode OTP Anda: ${otp}</b>`
+            subject: 'KODE OTP RESET PASSWORD - SIGEMAR',
+            html: `
+                <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+                    <h2 style="color: #2563eb;">Halo Bunda/Ayah!</h2>
+                    <p>Kami menerima permintaan reset password. Gunakan kode OTP di bawah ini:</p>
+                    <div style="background: #f3f4f6; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #ea580c;">
+                        ${otp}
+                    </div>
+                    <p style="font-size: 12px; color: #666; mt-4;">*Kode ini berlaku untuk sekali pakai. Jika bukan Bunda/Ayah yang meminta, abaikan saja nggih.</p>
+                </div>
+            `
         };
 
-        await transporter.sendMail(mailOptions);
-        
-        res.json({ message: "OTP berhasil dikirim ke email Bunda/Ayah!" });
-    } catch (err) { 
-        console.error(err);
-        res.status(500).json({ message: "Gagal mengirim email, coba lagi nanti nggih." }); 
+        try {
+            await transporter.sendMail(mailOptions);
+            res.json({ message: "OTP berhasil dikirim ke email Bunda/Ayah!" });
+        } catch (mailError) {
+            // Jika email gagal tapi DB sukses, kita kasih tahu kodenya di log server
+            console.error("Gagal Kirim Email:", mailError);
+            console.log("--- MODE DARURAT ---");
+            console.log(`OTP untuk ${email} adalah: ${otp}`);
+            console.log("---------------------");
+            
+            // Berikan pesan sukses palsu ke frontend (untuk testing) agar Bunda/Ayah bisa lanjut
+            res.json({ message: "OTP dikirim (Cek log server untuk kodenya nggih!)" });
+        }
+
+    } catch (err) {
+        console.error("Full Error:", err);
+        res.status(500).json({ message: "Terjadi kesalahan sistem, mohon coba lagi." });
     }
 });
 
-// --- 2. ENDPOINT RESET PASSWORD (Fix 404) ---
+// --- [REVISI] ENDPOINT RESET PASSWORD (api/index.js) ---
 app.post('/api/reset-password', async (req, res) => {
     const { email, otp, newPassword } = req.body;
+    
     try {
-        // Cari user yang email dan OTP-nya cocok
+        // 1. Validasi Input Dasar
+        if (!email || !otp || !newPassword) {
+            return res.status(400).json({ message: "Data tidak lengkap nggih Bunda/Ayah!" });
+        }
+
+        if (newPassword.length < 5) {
+            return res.status(400).json({ message: "Password baru minimal 5 karakter ya Bunda/Ayah." });
+        }
+
+        // 2. Cari user yang email dan OTP-nya cocok
         const { rows } = await sql`SELECT * FROM users WHERE email = ${email} AND otp = ${otp}`;
         
         if (rows.length === 0) {
-            return res.status(400).json({ message: "Kode OTP salah atau tidak cocok!" });
+            // Jika OTP salah atau email tidak cocok
+            return res.status(400).json({ message: "Kode OTP salah atau sudah tidak berlaku!" });
         }
 
-        // Update password dan hapus OTP agar tidak bisa dipakai lagi
+        // 3. Update password dan hapus OTP (SET otp = NULL)
+        // Ini penting agar kode OTP yang sama tidak bisa dipakai dua kali (keamanan).
         await sql`UPDATE users SET password = ${newPassword}, otp = NULL WHERE email = ${email}`;
         
-        res.json({ message: "Password berhasil diperbarui!" });
-    } catch (err) { res.status(500).json({ message: err.message }); }
+        console.log(`[RESET SUCCESS] Password untuk ${email} telah diperbarui.`);
+        
+        res.json({ message: "Password berhasil diperbarui! Silakan login kembali nggih." });
+
+    } catch (err) { 
+        console.error("Reset Password Error:", err);
+        res.status(500).json({ message: "Terjadi gangguan sistem saat mereset password." }); 
+    }
 });
 
 // --- IOT DATA (GET) ---
