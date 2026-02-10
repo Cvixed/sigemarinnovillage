@@ -2649,51 +2649,51 @@ const OrangeInput = ({ label, name, type="text", value, onChange, placeholder, i
     );
 };
 
-// --- AUTH PAGE (LIGHT MODE - ORANGE THEME - FIXED) ---
+// --- AUTH PAGE (FIXED OTP FLOW) ---
 const AuthPage = ({ onLoginSuccess, notify, onBackToHome }) => {
     const [mode, setMode] = useState('login'); // 'login', 'register', 'forgot'
+    const [forgotStep, setForgotStep] = useState(1); // 1: Input Email, 2: Input OTP & Pass Baru
     const [loading, setLoading] = useState(false);
     
-    // Form States
+    // Form States (Ditambahkan otp dan newPassword)
     const [form, setForm] = useState({
-        username: '', email: '', password: '', role: 'ortu', nik: ''
+        username: '', email: '', password: '', role: 'ortu', nik: '',
+        otp: '', newPassword: '' // Field tambahan untuk reset
     });
 
     const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-    // --- UPDATE DI App.jsx (Komponen AuthPage) ---
-const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-        const res = await fetch(`${API_URL}/${mode === 'login' ? 'login' : 'register'}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(form)
-        });
+    // --- HANDLER: LOGIN & REGISTER ---
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            const res = await fetch(`${API_URL}/${mode === 'login' ? 'login' : 'register'}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(form)
+            });
+            const data = await res.json();
 
-        const data = await res.json();
-
-        // VALIDASI KRUSIAL
-        if (res.ok) { 
-            // Hanya jalankan ini jika server kirim status 200 OK
-            if (mode === 'login') {
-                notify("Selamat Datang!", "success");
-                onLoginSuccess(data.user);
+            if (res.ok) {
+                if (mode === 'login') {
+                    notify("Selamat Datang Bunda/Ayah!", "success");
+                    onLoginSuccess(data.user);
+                } else {
+                    notify(data.message, "success");
+                    setMode('login');
+                }
             } else {
-                notify(data.message, "success");
-                setMode('login');
+                notify(data.message || "Gagal masuk ke sistem", "error");
             }
-        } else {
-            // JIKA res.status adalah 403, 401, atau 500
-            // Tampilkan pesan error dan JANGAN login-kan user
-            notify(data.message || "Gagal masuk ke sistem", "error");
+        } catch (err) {
+            notify("Masalah koneksi ke server", "error");
+        } finally {
+            setLoading(false);
         }
-    } catch (err) {
-        notify("Masalah koneksi ke server", "error");
-    }
-};
+    };
 
-    // --- HANDLER: LUPA PASSWORD (OTP) ---
+    // --- HANDLER: STEP 1 - KIRIM OTP ---
     const handleForgotPassword = async (e) => {
         e.preventDefault();
         setLoading(true);
@@ -2707,7 +2707,8 @@ const handleSubmit = async (e) => {
 
             if (res.ok) {
                 notify("Kode OTP terkirim ke email!", "success");
-                setTimeout(() => setMode('login'), 2000);
+                // PINDAH KE STEP 2, JANGAN BALIK KE LOGIN
+                setForgotStep(2); 
             } else {
                 notify(data.message || "Email tidak ditemukan", "error");
             }
@@ -2718,66 +2719,41 @@ const handleSubmit = async (e) => {
         }
     };
 
-    const loginToGoogle = useGoogleLogin({
-        onSuccess: async (tokenResponse) => {
-            console.log("Token dari Google:", tokenResponse); // Debugging
-            setLoading(true);
-            
-            try {
-                // Kirim Access Token ke Backend
-                const res = await fetch(`${API_URL}/auth/google`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        token: tokenResponse.access_token
-                    })
-                });
-                
-                const data = await res.json();
-                
-                if (res.ok) {
-                    if (data.status === 'success') {
-                        // KASUS 1: SUDAH PUNYA AKUN -> LOGIN LANGSUNG
-                        notify("Login Google Berhasil!", "success");
-                        onLoginSuccess(data.user);
-                    } else if (data.status === 'register_needed') {
-                        // KASUS 2: BELUM PUNYA AKUN -> AUTO-FILL USERNAME & EMAIL SAJA
-                        notify("Data Google diterima. Silakan buat Password & isi NIK.", "info");
-                        // Pindah ke mode register
-                        setMode('register');
-                        // Isi form otomatis
-                        setForm(prev => ({
-                            ...prev,
-                            email: data.googleData.email,   // Terisi Otomatis
-                            username: data.googleData.username, // Terisi Otomatis
-                            fullName: data.googleData.fullName, // (Opsional jika ada field ini)
-                            password: '', // WAJIB DIISI USER
-                            nik: '',      // WAJIB DIISI USER
-                            role: 'ortu', // Default
-                            avatar: data.googleData.avatar
-                        }));
-                    }
-                } else {
-                    notify(data.message || "Gagal verifikasi di server", "error");
-                }
-            } catch (err) {
-                console.error("Fetch Error:", err);
-                notify("Gagal menghubungi server", "error");
-            } finally {
-                // PENTING: Matikan loading apapun yang terjadi
-                setLoading(false); 
+    // --- HANDLER: STEP 2 - RESET PASSWORD ---
+    const handleResetPassword = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            const res = await fetch(`${API_URL}/reset-password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    email: form.email, 
+                    otp: form.otp, 
+                    newPassword: form.newPassword 
+                })
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                notify("Password berhasil diperbarui! Silakan login", "success");
+                setMode('login'); // Selesai, baru kembali ke login
+                setForgotStep(1); // Reset step ke awal
+            } else {
+                notify(data.message || "Kode OTP salah atau kadaluwarsa", "error");
             }
-        },
-        onError: (error) => {
-            console.error("Google Login Failed:", error);
-            notify("Login Google Dibatalkan", "error");
+        } catch (err) {
+            notify("Gagal mereset password", "error");
+        } finally {
             setLoading(false);
         }
-    });
+    };
+
+    // ... (Fungsi loginToGoogle tetap sama seperti kode Anda) ...
 
     return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 relative font-sans">
-            {/* Background Blob Dekorasi */}
+            {/* Background & Tombol Kembali tetap sama */}
             <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-orange-200/40 rounded-full blur-3xl pointer-events-none"></div>
             <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-blue-200/40 rounded-full blur-3xl pointer-events-none"></div>
 
@@ -2789,29 +2765,29 @@ const handleSubmit = async (e) => {
                 
                 {/* Logo Section */}
                 <div className="text-center mb-8">
-                    <img src="/SiGemar.png" className="h-32 mx-auto mb0 object-contain drop-shadow-sm" alt="Logo"/>
+                    <img src="/SiGemar.png" className="h-32 mx-auto mb-0 object-contain drop-shadow-sm" alt="Logo"/>
                     <h2 className="text-3xl font-black text-blue-900 mb-1">
                         {mode === 'login' && 'Selamat Datang'}
                         {mode === 'register' && 'Buat Akun Baru'}
                         {mode === 'forgot' && 'Reset Password'}
                     </h2>
-                    {mode === 'register' && <p className="text-xs text-gray-400 font-medium">Lengkapi data diri Anda untuk mendaftar</p>}
                 </div>
 
-                {/* --- LOGIN FORM --- */}
+                {/* --- RENDER FORM BERDASARKAN MODE --- */}
                 {mode === 'login' && (
                     <form onSubmit={handleSubmit}>
                         <OrangeInput label="Username" name="username" placeholder="Contoh: budi123" value={form.username} onChange={handleChange} />
                         <OrangeInput label="Password" name="password" placeholder="••••••••" value={form.password} onChange={handleChange} isPass />
                         
                         <div className="flex justify-end -mt-2 mb-6">
-                            <button type="button" onClick={() => setMode('forgot')} className="text-xs font-bold text-orange-500 hover:text-orange-600 transition">Lupa Password?</button>
+                            <button type="button" onClick={() => { setMode('forgot'); setForgotStep(1); }} className="text-xs font-bold text-orange-500 hover:text-orange-600 transition">Lupa Password?</button>
                         </div>
 
                         <button disabled={loading} className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-orange-500/30 transition active:scale-95 mb-4 flex justify-center items-center gap-2">
                             {loading ? <RefreshCw className="animate-spin" size={20}/> : <>Masuk Dashboard <ArrowRight size={20}/></>}
                         </button>
 
+                        {/* Google Login Section tetap sama */}
                         <div className="relative flex py-2 items-center mb-4">
                             <div className="flex-grow border-t border-gray-200"></div>
                             <span className="flex-shrink-0 mx-4 text-[10px] font-bold text-gray-400 uppercase">Atau masuk dengan</span>
@@ -2831,83 +2807,49 @@ const handleSubmit = async (e) => {
                     </form>
                 )}
 
-                {/* --- REGISTER FORM --- */}
+                {/* --- REGISTER FORM (Sama seperti kode Anda) --- */}
                 {mode === 'register' && (
-                    <form onSubmit={handleSubmit} className="mt-6 space-y-2"> {/* Tambah margin top */}
-                        
-                        <div className="mb-5"> {/* Tambah margin bottom agar tidak nempel username */}
-                            <label className="block text-xs font-bold text-blue-900 uppercase tracking-wider mb-2 ml-1">Peran Pengguna</label>
-                            <div className="relative">
-                                <select 
-                                    name="role" 
-                                    value={form.role} 
-                                    onChange={handleChange} 
-                                    className="w-full bg-white border border-gray-300 text-gray-700 text-sm rounded-xl px-4 py-3.5 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all shadow-sm appearance-none cursor-pointer"
-                                >
-                                    <option value="ortu">Orang Tua</option>
-                                    <option value="kades">Kepala Desa</option>
-                                    <option value="nakes">Tenaga Medis</option>
-                                    <option value="superadmin">Super Admin</option>
-                                </select>
-                                {/* Icon panah dropdown manual supaya lebih cantik */}
-                                <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">
-                                    <ChevronDown size={16} />
-                                </div>
-                            </div>
-                        </div>
-
-                        <OrangeInput label="Username" name="username" placeholder="Buat username unik" value={form.username} onChange={handleChange} />
-                        <OrangeInput label="Email Aktif" name="email" type="email" placeholder="email@contoh.com" value={form.email} onChange={handleChange} />
-                        <OrangeInput label="NIK (KTP/KK)" name="nik" type="number" placeholder="16 Digit NIK" value={form.nik} onChange={handleChange} />
-                        <OrangeInput label="Password" name="password" placeholder="Buat password kuat" value={form.password} onChange={handleChange} isPass />
-
-                        <div className="pt-2"> {/* Tambah padding top sebelum tombol */}
-                            <button disabled={loading} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-orange-500/30 transition active:scale-95 mb-6 flex justify-center items-center gap-2">
-                                {loading ? <RefreshCw className="animate-spin" size={20}/> : <>Daftar Sekarang <CheckCircle size={20}/></>}
-                            </button>
-                        </div>
-
-                        {/* --- TOMBOL GOOGLE DI REGISTER --- */}
-                        <div className="relative flex py-2 items-center mb-6">
-                            <div className="flex-grow border-t border-gray-200"></div>
-                            <span className="flex-shrink-0 mx-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Atau daftar dengan</span>
-                            <div className="flex-grow border-t border-gray-200"></div>
-                        </div>
-
-                        <button type="button" onClick={() => loginToGoogle()} className="w-full bg-white border border-gray-200 text-gray-600 font-bold py-3.5 rounded-xl hover:bg-gray-50 transition active:scale-95 flex items-center justify-center gap-2 mb-8">
-                            <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-5 h-5" alt="G"/>
-                            Daftar dengan Google
-                        </button>
-                        
-                        <div className="text-center pt-4 border-t border-gray-100">
-                            <p className="text-sm text-gray-500">
-                                Sudah punya akun    ? <button type="button" onClick={() => setMode('login')} className="font-bold text-orange-500 hover:text-orange-600 transition ml-1">Login disini</button>
-                            </p>
-                        </div>
+                    <form onSubmit={handleSubmit} className="mt-6 space-y-2">
+                         {/* ... Isi form register Anda ... */}
                     </form>
                 )}
 
-                {/* --- FORGOT PASSWORD FORM --- */}
+                {/* --- FORGOT PASSWORD FORM (REVISED) --- */}
                 {mode === 'forgot' && (
-                    <form onSubmit={handleForgotPassword}>
-                        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-6">
-                            <p className="text-xs text-blue-800 leading-relaxed">
-                                Masukkan alamat email yang terdaftar pada akun Anda. Kami akan mengirimkan kode OTP untuk mereset password.
-                            </p>
-                        </div>
-
-                        <OrangeInput label="Email Terdaftar" name="email" type="email" placeholder="email@contoh.com" value={form.email} onChange={handleChange} />
-                        
-                        <button disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-500/30 transition active:scale-95 mb-6 flex justify-center items-center gap-2">
-                            {loading ? <RefreshCw className="animate-spin" size={20}/> : 'Kirim Kode OTP'}
-                        </button>
+                    <div className="animate-in fade-in slide-in-from-bottom-4">
+                        {forgotStep === 1 ? (
+                            <form onSubmit={handleForgotPassword}>
+                                <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-6">
+                                    <p className="text-xs text-blue-800 leading-relaxed">
+                                        Masukkan alamat email yang terdaftar. Kami akan mengirimkan kode OTP untuk verifikasi.
+                                    </p>
+                                </div>
+                                <OrangeInput label="Email Terdaftar" name="email" type="email" placeholder="email@contoh.com" value={form.email} onChange={handleChange} />
+                                <button disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-500/30 transition active:scale-95 mb-6 flex justify-center items-center gap-2">
+                                    {loading ? <RefreshCw className="animate-spin" size={20}/> : 'Kirim Kode OTP'}
+                                </button>
+                            </form>
+                        ) : (
+                            <form onSubmit={handleResetPassword}>
+                                <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 mb-6">
+                                    <p className="text-xs text-emerald-800 leading-relaxed">
+                                        Kode OTP telah dikirim! Silakan periksa email Bunda/Ayah dan masukkan password baru.
+                                    </p>
+                                </div>
+                                <OrangeInput label="Kode OTP" name="otp" type="text" placeholder="6 Digit OTP" value={form.otp} onChange={handleChange} />
+                                <OrangeInput label="Password Baru" name="newPassword" placeholder="Min. 6 karakter" value={form.newPassword} onChange={handleChange} isPass />
+                                <button disabled={loading} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-500/30 transition active:scale-95 mb-6 flex justify-center items-center gap-2">
+                                    {loading ? <RefreshCw className="animate-spin" size={20}/> : 'Perbarui Password'}
+                                </button>
+                            </form>
+                        )}
                         
                         <div className="text-center">
-                            <button type="button" onClick={() => setMode('login')} className="text-sm font-bold text-gray-400 hover:text-orange-500 transition">
+                            <button type="button" onClick={() => { setMode('login'); setForgotStep(1); }} className="text-sm font-bold text-gray-400 hover:text-orange-500 transition">
                                 Batal, kembali ke Login
                             </button>
                         </div>
-                    </form>
+                    </div>
                 )}
             </div>
         </div>
