@@ -736,7 +736,7 @@ const LandingPage = ({ onNavigateToLogin }) => {
                         <img 
                             src="/telu.png" 
                             alt="Telkom University" 
-                            className="h-18 md:h-18 w-auto object-contain hover:scale-110 transition-transform duration-300 drop-shadow-md rounded px-2 py-1"
+                            className="h-12 md:h-12 w-auto object-contain hover:scale-110 transition-transform duration-300 drop-shadow-md rounded px-2 py-1"
                         />
 
                         {/* 5. Temanggung */}
