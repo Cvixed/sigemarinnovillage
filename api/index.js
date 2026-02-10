@@ -324,20 +324,41 @@ app.post('/api/auth/google', async (req, res) => {
     } catch (error) { res.status(401).json({ message: "Token Google Invalid" }); }
 });
 
-// --- 1. ENDPOINT LUPA PASSWORD (Kirim OTP) ---
+const nodemailer = require('nodemailer');
+
+// Konfigurasi pengirim email
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: 'teamsigemar@gmail.com', // Sesuai di gambar Bunda/Ayah
+        pass: 'isi_dengan_app_password_google_anda' // Jangan pakai password email biasa
+    }
+});
+
 app.post('/api/forgot-password', async (req, res) => {
     const { email } = req.body;
     try {
-        const otp = Math.floor(100000 + Math.random() * 900000).toString(); // Generate 6 digit
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
         const { rowCount } = await sql`UPDATE users SET otp = ${otp} WHERE email = ${email}`;
 
         if (rowCount === 0) return res.status(404).json({ message: "Email tidak terdaftar!" });
 
-        // Simulasikan pengiriman email (tampilkan di console log server)
-        console.log(`[OTP DEBUG] Kirim ke ${email}: ${otp}`);
+        // Proses pengiriman email asli ke Bunda/Ayah
+        const mailOptions = {
+            from: '"SiGemar Admin" <teamsigemar@gmail.com>',
+            to: email,
+            subject: 'KODE OTP RESET PASSWORD',
+            text: `Kode OTP Anda: ${otp}`,
+            html: `<b>Kode OTP Anda: ${otp}</b>`
+        };
+
+        await transporter.sendMail(mailOptions);
         
-        res.json({ message: "OTP berhasil dikirim!" });
-    } catch (err) { res.status(500).json({ message: err.message }); }
+        res.json({ message: "OTP berhasil dikirim ke email Bunda/Ayah!" });
+    } catch (err) { 
+        console.error(err);
+        res.status(500).json({ message: "Gagal mengirim email, coba lagi nanti nggih." }); 
+    }
 });
 
 // --- 2. ENDPOINT RESET PASSWORD (Fix 404) ---
