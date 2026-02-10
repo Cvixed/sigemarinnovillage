@@ -7,6 +7,16 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import nodemailer from 'nodemailer';
 import axios from 'axios';
 
+const nodemailer = require('nodemailer'); // Pastikan ini ada di paling atas file!
+// KONFIGURASI PENGIRIM (Double check di sini!)
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: 'teamsigemar@gmail.com',
+        pass: 'cvow kwom spsr sjjz' 
+    }
+});
+
 dotenv.config();
 const app = express();
 
@@ -322,17 +332,6 @@ app.post('/api/auth/google', async (req, res) => {
             res.json({ status: 'register_needed', message: "Silakan lengkapi NIK", googleData: { email, fullName: name, username: email.split('@')[0], avatar: picture } });
         }
     } catch (error) { res.status(401).json({ message: "Token Google Invalid" }); }
-});
-
-const nodemailer = require('nodemailer'); // Pastikan ini ada di paling atas file!
-
-// KONFIGURASI PENGIRIM (Double check di sini!)
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: 'teamsigemar@gmail.com',
-        pass: 'cvow kwom spsr sjjz' 
-    }
 });
 
 app.post('/api/forgot-password', async (req, res) => {
