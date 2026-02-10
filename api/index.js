@@ -35,6 +35,7 @@ app.get('/api/setup-db', async (req, res) => {
             username VARCHAR(255) UNIQUE NOT NULL,
             password VARCHAR(255),
             role VARCHAR(50) DEFAULT 'ortu',
+            status VARCHAR(20) DEFAULT 'pending',
             full_name VARCHAR(255),
             email VARCHAR(255),
             phone VARCHAR(50),
@@ -139,24 +140,61 @@ const processFullDiagnosis = (body) => {
     const dTinggi = analyzeMetric(tinggi, umur, 'tinggi');
     const dLk = analyzeMetric(lk, umur, 'lk');
 
+    // 1. Tentukan Main Status
     let mainStatus = "Normal";
     let sideStatuses = [];
-    if (dBerat.label === 'KURANG' || dTinggi.label === 'PENDEK' || dLk.label === 'KECIL') mainStatus = "Stunting";
-    else if (dBerat.label === 'LEBIH') mainStatus = "Overweight";
-    
-    if (dLk.label === 'BESAR') sideStatuses.push("Macrocephaly");
 
-    let finalStatus = sideStatuses.length > 0 ? `${mainStatus} & ${sideStatuses.join(' & ')}` : mainStatus;
-    if (!berat && !tinggi) finalStatus = "Menunggu Data";
+    // Cek Kondisi Risiko Stunting (Prioritas 1)
+    const isBelowStd = (dBerat.label === 'KURANG' || dTinggi.label === 'PENDEK' || dLk.label === 'KECIL');
+    if (isBelowStd) {
+        mainStatus = "Risiko Stunting";
+        if (dTinggi.label === 'PENDEK') sideStatuses.push("Tinggi Kurang");
+        if (dBerat.label === 'KURANG') sideStatuses.push("Kurang Gizi");
+        if (dLk.label === 'KECIL') sideStatuses.push("Microcephaly");
+    } 
+    // Cek Kondisi Overweight (Prioritas 2)
+    else if (dBerat.label === 'LEBIH') {
+        mainStatus = "Overweight";
+    }
+
+    // 2. Tentukan Side Status Abnormal (Tinggi Lebih / Macrocephaly)
+    if (dTinggi.label === 'TINGGI') {
+        sideStatuses.push("Tinggi Lebih");
+    }
+    if (dLk.label === 'BESAR') {
+        sideStatuses.push("Macrocephaly");
+    }
+
+    // 3. KONSTRUKSI FINAL STATUS (LOGIKA BARU)
+    let finalStatus = "";
+
+    if (sideStatuses.length > 0) {
+        // Jika ada masalah (side status), cek apakah main statusnya Normal?
+        if (mainStatus === "Normal") {
+            // JIKA ADA SIDE STATUS TAPI TIDAK STUNTING/OVERWEIGHT -> BUANG KATA "NORMAL"
+            finalStatus = sideStatuses.join(" & ");
+        } else {
+            // Jika Stunting/Overweight, tetap taruh di depan
+            finalStatus = `${mainStatus} & ${sideStatuses.join(" & ")}`;
+        }
+    } else {
+        // Jika benar-benar bersih tidak ada side status sama sekali
+        finalStatus = mainStatus;
+    }
+
+    // Proteksi data kosong
+    if (!berat && !tinggi && !lk) {
+        finalStatus = "Menunggu Data";
+    }
 
     return {
         ...body,
         berat, tinggi, lk,
         status: finalStatus,
-        analysis: { 
-            berat: { ...dBerat, status: dBerat.label }, 
-            tinggi: { ...dTinggi, status: dTinggi.label }, 
-            lk: { ...dLk, status: dLk.label } 
+        analysis: {
+            berat: { ...dBerat, status: dBerat.label },
+            tinggi: { ...dTinggi, status: dTinggi.label },
+            lk: { ...dLk, status: dLk.label }
         }
     };
 };
@@ -169,17 +207,28 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'OK', db: 'Vercel Postgres (Ready)' });
 });
 
-// --- AUTH LOGIN ---
+// Di dalam /api/setup-db, update create table users:
+// status VARCHAR(20) DEFAULT 'pending'
+
+// --- 1. UPDATE LOGIN (api/index.js) ---
 app.post('/api/login', async (req, res) => {
     try {
         const { username, password } = req.body;
-        // Query SQL
         const { rows } = await sql`SELECT * FROM users WHERE username = ${username}`;
         
         if (rows.length === 0 || rows[0].password !== password) {
-            return res.status(401).json({ message: "Login Gagal" });
+            return res.status(401).json({ message: "Username atau Password salah" });
         }
+
         const user = rows[0];
+
+        // CEK STATUS APPROVAL
+        if (user.status === 'pending') {
+            return res.status(403).json({ 
+                message: "Akun Anda belum disetujui oleh Super Admin. Mohon tunggu nggih Bunda/Ayah." 
+            });
+        }
+
         res.json({ 
             message: "Login Sukses", 
             user: { username: user.username, role: user.role, fullName: user.full_name, nik: user.nik } 
@@ -187,18 +236,53 @@ app.post('/api/login', async (req, res) => {
     } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// --- AUTH REGISTER ---
+// --- 2. TAMBAH ROUTE APPROVAL (api/index.js) ---
+// Ambil daftar user yang pending
+app.get('/api/users/pending', async (req, res) => {
+    try {
+        const { rows } = await sql`SELECT id, username, email, role, full_name, nik FROM users WHERE status = 'pending' ORDER BY created_at DESC`;
+        res.json(rows);
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// Setujui User
+app.put('/api/users/approve/:id', async (req, res) => {
+    try {
+        await sql`UPDATE users SET status = 'active' WHERE id = ${req.params.id}`;
+        res.json({ message: "User disetujui!" });
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// Tolak/Hapus User
+app.delete('/api/users/reject/:id', async (req, res) => {
+    try {
+        await sql`DELETE FROM users WHERE id = ${req.params.id}`;
+        res.json({ message: "User ditolak dan dihapus." });
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// --- [REVISI] AUTH REGISTER (api/index.js) ---
 app.post('/api/register', async (req, res) => {
     try {
         const { username, password, email, fullName, nik, phone, role } = req.body;
-        // Insert SQL
+        
+        // --- LOGIKA OTOMATIS AKTIF UNTUK ORTU ---
+        // Jika role adalah 'ortu', status langsung 'active'. Selain itu 'pending'.
+        const initialStatus = (role === 'ortu') ? 'active' : 'pending';
+
         await sql`
-            INSERT INTO users (username, password, email, full_name, nik, phone, role)
-            VALUES (${username}, ${password}, ${email}, ${fullName}, ${nik}, ${phone}, ${role || 'ortu'})
+            INSERT INTO users (username, password, email, full_name, nik, phone, role, status)
+            VALUES (${username}, ${password}, ${email}, ${fullName}, ${nik}, ${phone}, ${role || 'ortu'}, ${initialStatus})
         `;
-        res.json({ message: "Registrasi Berhasil" });
+
+        // Berikan respon yang berbeda agar user tidak bingung
+        if (initialStatus === 'active') {
+            res.json({ message: "Registrasi Berhasil! Silakan masuk." });
+        } else {
+            res.json({ message: "Registrasi Berhasil! Mohon tunggu persetujuan Admin untuk akses ini." });
+        }
+
     } catch (err) { 
-        // Handle Duplicate
         if(err.code === '23505') return res.status(400).json({ message: "Username/Email sudah dipakai" });
         res.status(500).json({ message: err.message }); 
     }
@@ -369,52 +453,140 @@ app.put('/api/profile', async (req, res) => {
 // 4. AI FEATURES (UTUH KEMBALI)
 // ==========================================
 
+// --- AI FEATURES (UPDATED: 12 BULAN ROADMAP & DETAIL) ---
 app.post('/api/consult-ai', async (req, res) => {
     const { childData, nakesNotes } = req.body;
     try {
         const dBerat = analyzeMetric(childData.berat, childData.umur, 'berat');
         const dTinggi = analyzeMetric(childData.tinggi, childData.umur, 'tinggi');
         
+        // Prompt yang sudah diperkuat
         const promptText = `
-           Bertindaklah sebagai Dokter Spesialis Anak.
-           PROFIL: ${childData.nama} (${childData.umur} bln). Keluhan: "${nakesNotes}"
-           ANALISIS: BB=${childData.berat}kg (${dBerat.label}), TB=${childData.tinggi}cm (${dTinggi.label}).
+           Bertindaklah sebagai Dokter Spesialis Anak Konsultan Tumbuh Kembang dan Ahli Gizi.
            
-           OUTPUT JSON ONLY:
+           DATA PASIEN:
+           - Nama: ${childData.nama}
+           - Umur: ${childData.umur} bulan
+           - Status Gizi Saat Ini: ${childData.status}
+           - Berat: ${childData.berat}kg (${dBerat.label})
+           - Tinggi: ${childData.tinggi}cm (${dTinggi.label})
+           - Catatan Nakes/Gejala: "${nakesNotes}"
+
+           TUGAS:
+           Berikan analisis medis mendalam dan roadmap penanganan jangka panjang.
+
+           ATURAN WAJIB (STRICT RULES):
+           1. Gunakan BAHASA INDONESIA yang baku, empatik, dan mudah dipahami orang tua. Jangan gunakan bahasa Inggris.
+           2. Roadmap HARUS mencakup rentang waktu 12 BULAN KE DEPAN (JANGAN hanya beberapa minggu).
+           3. Pada bagian 'roadmap', setiap poin 'kegiatan' (nutrisi & stimulasi) HARUS memiliki MINIMAL 3-4 butir saran yang spesifik dan detail.
+           4. Jangan memberikan saran umum, berikan saran spesifik sesuai umur dan kondisi anak.
+
+           FORMAT OUTPUT WAJIB JSON (Tanpa markdown lain):
            {
-               "analisis": "Narasi medis...",
-               "faktor_risiko": ["Risiko 1", "Risiko 2"],
-               "preventif": [ {"teks": "...", "kategori": "nutrisi"} ],
-               "represif": [ {"teks": "...", "kategori": "dokter"} ],
-               "roadmap": [ { "fase": "...", "target": "...", "kegiatan": { "nutrisi": [], "stimulasi": [], "medis": "" } } ]
+               "analisis": "Narasi medis lengkap minimal 2 paragraf tentang kondisi anak, penyebab kemungkinan, dan urgensi penanganan...",
+               "faktor_risiko": ["Sebutkan risiko 1", "Sebutkan risiko 2", "Sebutkan risiko 3 (min 3)"],
+               "preventif": [ 
+                    {"teks": "Saran pencegahan detail 1...", "kategori": "nutrisi"},
+                    {"teks": "Saran pencegahan detail 2...", "kategori": "stimulasi"}
+               ],
+               "represif": [ 
+                    {"teks": "Tindakan pengobatan/koreksi 1...", "kategori": "dokter"},
+                    {"teks": "Tindakan pengobatan/koreksi 2...", "kategori": "nutrisi"}
+               ],
+               "roadmap": [ 
+                    { 
+                        "fase": "Bulan 1 (Stabilisasi & Inisiasi)", 
+                        "target": "Target kenaikan BB spesifik atau perbaikan gejala...", 
+                        "kegiatan": { 
+                            "nutrisi": ["Menu detail pagi..", "Menu detail siang..", "Aturan jam makan..", "Suplementasi jika perlu.."], 
+                            "stimulasi": ["Aktivitas fisik spesifik 1..", "Aktivitas fisik spesifik 2..", "Mainan yang disarankan.."], 
+                            "medis": "Jadwal kontrol dokter atau cek lab spesifik..." 
+                        } 
+                    },
+                    { 
+                        "fase": "Bulan 2-3 (Kejar Tumbuh)", 
+                        "target": "Target catch-up growth...", 
+                        "kegiatan": { 
+                            "nutrisi": ["Peningkatan kalori..", "Variasi protein hewani..", "Saran cemilan padat gizi.."], 
+                            "stimulasi": ["Stimulasi motorik kasar..", "Stimulasi motorik halus..", "Interaksi sosial.."], 
+                            "medis": "Evaluasi kenaikan BB dan TB..." 
+                        } 
+                    },
+                    { 
+                        "fase": "Bulan 4-6 (Pemantauan Ketat)", 
+                        "target": "Mempertahankan grafik pertumbuhan...", 
+                        "kegiatan": { 
+                            "nutrisi": ["Poin detail 1...", "Poin detail 2...", "Poin detail 3..."], 
+                            "stimulasi": ["Poin detail 1...", "Poin detail 2...", "Poin detail 3..."], 
+                            "medis": "Skrining perkembangan..." 
+                        } 
+                    },
+                    { 
+                        "fase": "Bulan 7-12 (Normalisasi & Maintenance)", 
+                        "target": "Tumbuh kembang sesuai kurva WHO...", 
+                        "kegiatan": { 
+                            "nutrisi": ["Poin detail 1...", "Poin detail 2...", "Poin detail 3..."], 
+                            "stimulasi": ["Poin detail 1...", "Poin detail 2...", "Poin detail 3..."], 
+                            "medis": "Vaksinasi dan cek rutin..." 
+                        } 
+                    }
+               ]
            }`;
 
         const result = await model.generateContent(promptText);
         let text = result.response.text().replace(/```json|```/g, '').trim();
         const jsonResult = JSON.parse(text);
         
+        // Mapping Gambar Icon (Code lama tetap dipertahankan)
         const mapImg = (arr) => arr ? arr.map(item => ({ ...item, image: IMAGE_MAP[item.kategori] || IMAGE_MAP['default'] })) : [];
         if (jsonResult.preventif) jsonResult.preventif = mapImg(jsonResult.preventif);
         if (jsonResult.represif) jsonResult.represif = mapImg(jsonResult.represif);
 
         res.json({ reply: JSON.stringify(jsonResult) });
     } catch (error) {
-        res.status(500).json({ reply: JSON.stringify({ analisis: "Gagal analisis AI.", preventif: [], represif: [] }) });
+        console.error("AI Error:", error);
+        // Error handling yang lebih robust
+        res.status(500).json({ 
+            reply: JSON.stringify({ 
+                analisis: "Maaf, AI sedang sibuk. Silakan coba sesaat lagi.", 
+                preventif: [], 
+                represif: [],
+                roadmap: []
+            }) 
+        });
     }
 });
 
+// --- Update di api/index.js ---
 app.post('/api/chat-bot', async (req, res) => {
     const { childData, question } = req.body;
     try {
         const prompt = `
-        Bertindaklah sebagai 'SiGemar Bot', asisten kesehatan anak posyandu yang ramah.
+        Bertindaklah sebagai 'SiGemar Bot', asisten kesehatan anak yang cerdas dan adaptif untuk wilayah Temanggung, Jawa Tengah.
         DATA ANAK: ${childData.nama}, Umur ${childData.umur} bln, Status ${childData.status}.
-        PERTANYAAN: "${question}"
-        Jawab singkat, padat, ramah.
+        PERTANYAAN USER: "${question}"
+        
+        ATURAN RESPONS (WAJIB DIPATUHI):
+        1. DETEKSI BAHASA: Gunakan bahasa yang SAMA dengan bahasa yang digunakan oleh Bunda/Ayah saat bertanya.
+        2. JIKA USER BERTANYA DALAM BAHASA INDONESIA: Jawablah dengan Bahasa Indonesia yang baik, ramah, dan solutif.
+        3. JIKA USER BERTANYA DALAM BAHASA JAWA (Ngoko/Kromo): Jawablah dengan Bahasa Jawa yang santun (Kromo Madya atau Kromo Alus) agar terasa dekat dan menghormati.
+        4. SAPAAN: Selalu gunakan sebutan 'Bunda/Ayah' di setiap awal atau akhir kalimat.
+        5. TANPA BINTANG: JANGAN gunakan format markdown bold (**) atau simbol bintang sama sekali. Berikan teks polos yang bersih.
+        6. EMPATI: Berikan jawaban yang menenangkan dan praktis berdasarkan data pertumbuhan anak tersebut.
         `;
+
         const result = await modelText.generateContent(prompt);
-        res.json({ reply: result.response.text() });
-    } catch (e) { res.status(500).json({ reply: "Maaf error." }); }
+        let replyText = result.response.text();
+
+        // --- FILTER KEAMANAN AKHIR ---
+        // Menghapus paksa simbol bintang jika AI masih memberikan markdown
+        replyText = replyText.replace(/\*\*/g, '').replace(/\*/g, '');
+
+        res.json({ reply: replyText });
+    } catch (e) { 
+        // Pesan error juga dibuat netral
+        res.status(500).json({ reply: "Mohon maaf Bunda/Ayah, sistem sedang mengalami gangguan teknis sebentar. Silakan coba lagi nggih." }); 
+    }
 });
 
 app.post('/api/generate-article', async (req, res) => {
@@ -433,5 +605,27 @@ app.post('/api/generate-article', async (req, res) => {
 if (process.env.NODE_ENV !== 'production') {
     app.listen(PORT, () => console.log(`🚀 Server running locally on port ${PORT}`));
 }
+
+// --- USER MANAGEMENT ROUTES ---
+app.get('/api/users/pending', async (req, res) => {
+    try {
+        const { rows } = await sql`SELECT id, username, email, role, full_name, nik FROM users WHERE status = 'pending' ORDER BY created_at DESC`;
+        res.json(rows);
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.put('/api/users/approve/:id', async (req, res) => {
+    try {
+        await sql`UPDATE users SET status = 'active' WHERE id = ${req.params.id}`;
+        res.json({ message: "User disetujui!" });
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+app.delete('/api/users/reject/:id', async (req, res) => {
+    try {
+        await sql`DELETE FROM users WHERE id = ${req.params.id}`;
+        res.json({ message: "User ditolak dan dihapus." });
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
 
 export default app;

@@ -10,9 +10,8 @@ import 'leaflet/dist/leaflet.css';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip as LeafletTooltip } from 'react-leaflet';
 import L from 'leaflet';
 
-// --- KONFIGURASI API (DARI .ENV) ---
-// Logika: Jika Production (Vercel), pakai '/api'. Jika Local, ambil dari .env
-const API_URL = '/api';
+// Jika Development (Local), tembak ke port 3000. Jika Production (Vercel), pakai '/api' relative.
+const API_URL = import.meta.env.DEV ? 'http://localhost:3000/api' : '/api';
 
 // --- GOOGLE CLIENT ID (DARI .ENV) ---
 // Mengambil nilai dari file .env
@@ -137,7 +136,7 @@ const SearchableSelect = ({ label, name, value, onChange, options, disabled }) =
     }, [value, options]);
 
     const filteredOptions = options ? options.filter(opt => 
-        opt.name.toLowerCase().includes(searchTerm.toLowerCase())
+        opt?.name && opt.name.toLowerCase().includes(searchTerm.toLowerCase())
     ) : [];
 
     const handleSelect = (opt) => {
@@ -210,16 +209,24 @@ const StatusBadge = ({ status }) => {
   const conditions = status.split(' & ');
 
   // 2. Helper Style Warna (Sama seperti sebelumnya)
-  const getBadgeStyle = (cond) => {
-      const c = cond.toUpperCase();
-      if (c === 'NORMAL') return 'bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-200';
-      if (c.includes('STUNTING') || c.includes('PENDEK')) return 'bg-rose-100 text-rose-700 border-rose-200 hover:bg-rose-200';
-      if (c.includes('KURANG') || c.includes('BURUK')) return 'bg-red-100 text-red-700 border-red-200 hover:bg-red-200';
-      if (c.includes('OVERWEIGHT') || c.includes('LEBIH')) return 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200';
-      if (c.includes('MICRO') || c.includes('MIKRO') || c.includes('MACRO') || c.includes('MAKRO')) return 'bg-pink-100 text-pink-700 border-pink-200 hover:bg-pink-200';
-      if (c.includes('TINGGI')) return 'bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200';
-      return 'bg-gray-100 text-gray-600 border-gray-200';
-  };
+  // Cari fungsi getBadgeStyle di dalam komponen StatusBadge dan ganti dengan ini:
+
+const getBadgeStyle = (cond) => {
+    const c = cond.toUpperCase();
+    if (c === 'NORMAL') return 'bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-200';
+    if (c.includes('STUNTING') || c.includes('PENDEK')) return 'bg-rose-100 text-rose-700 border-rose-200 hover:bg-rose-200';
+    if (c.includes('KURANG') || c.includes('BURUK')) return 'bg-red-100 text-red-700 border-red-200 hover:bg-red-200';
+    
+    // PINDAHKAN PENGECEKAN TINGGI KE SINI (Sebelum pengecekan "LEBIH")
+    if (c.includes('TINGGI')) return 'bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200';
+    
+    // Baru kemudian cek Overweight/Lebih
+    if (c.includes('OVERWEIGHT') || c.includes('LEBIH')) return 'bg-orange-100 text-orange-700 border-orange-200 hover:bg-orange-200';
+    
+    if (c.includes('MICRO') || c.includes('MIKRO') || c.includes('MACRO') || c.includes('MAKRO')) return 'bg-pink-100 text-pink-700 border-pink-200 hover:bg-pink-200';
+    
+    return 'bg-gray-100 text-gray-600 border-gray-200';
+};
 
   // 3. Helper Penjelasan (Mapping status backend ke kamus definisi)
   const getDescription = (cond) => {
@@ -302,7 +309,15 @@ const Sidebar = ({ userRole, activePage, setActivePage, onLogout, setRegisterMod
             { id: 'view-stunting', label: 'Pasien Stunting', icon: <AlertTriangle size={20}/>, roles: ['superadmin', 'nakes', 'kades'] },
             { id: 'view-abnormal', label: 'Pasien Abnormal', icon: <ShieldAlert size={20}/>, roles: ['superadmin', 'nakes', 'kades'] } 
         ] },
-        { title: "Operasional", items: [ { id: 'articles', label: 'Manajemen Berita', icon: <Newspaper size={20}/>, roles: ['superadmin'] }, { id: 'register-new', label: 'Registrasi User', icon: <Plus size={20}/>, roles: ['superadmin'], action: true } ] }
+        // Di dalam komponen Sidebar, menuGroups:
+{ 
+    title: "Operasional", 
+    items: [ 
+        { id: 'user-approval', label: 'Persetujuan User', icon: <ShieldCheck size={20}/>, roles: ['superadmin'] }, // TAMBAHKAN INI
+        { id: 'articles', label: 'Manajemen Berita', icon: <Newspaper size={20}/>, roles: ['superadmin'] },
+        { id: 'register-new', label: 'Registrasi User', icon: <Plus size={20}/>, roles: ['superadmin'], action: true } 
+    ] 
+}
     ];
 
     const handleMenuClick = (item) => { 
@@ -337,13 +352,13 @@ const Sidebar = ({ userRole, activePage, setActivePage, onLogout, setRegisterMod
                 {/* Header Sidebar */}
                 <div className={`h-20 flex items-center px-6 border-b border-slate-800 shrink-0 transition-all duration-300 ${isExpanded || isMobileOpen ? 'justify-between' : 'justify-center'}`}>
                     <div className="flex items-center gap-3">
-                        <img src="SiGemar.png" className="h-10 w-auto object-contain" alt="Logo" />
+                        <img src="SiGemar.png" className="h-24 w-auto object-contain" alt="Logo" />
                         <div className={`overflow-hidden whitespace-nowrap transition-all duration-300 ${isExpanded || isMobileOpen ? 'w-auto opacity-100' : 'w-0 opacity-0'}`}>
                             <h1 className="font-black text-xl tracking-tight leading-none">
-                                <span className="text-orange-500">Si</span>Gemar
+                                <span className="text-orange-500">User</span> Panel
                             </h1>
+                            </div>
                         </div>
-                    </div>
 
                     {/* TOMBOL SILANG (X) - Hanya Muncul di Mobile */}
                     <button onClick={() => setIsMobileOpen(false)} className="md:hidden text-slate-400 hover:text-white p-1">
@@ -453,7 +468,7 @@ const ArticleDetailModal = ({ article, onClose }) => {
     );
 };
 
-// --- ARTICLE MANAGER (STABLE: TEXTAREA + AI) ---
+// --- ARTICLE MANAGER (STABLE: TEXTAREA + AI + AUTO COMPRESS) ---
 const ArticleManager = ({ onBack, notify }) => {
     const [articles, setArticles] = useState([]);
     const [newArticle, setNewArticle] = useState({ title: '', content: '', image: '' });
@@ -464,15 +479,13 @@ const ArticleManager = ({ onBack, notify }) => {
     const fetchArticles = async () => { try { const res = await fetch(`${API_URL}/articles`); if(res.ok) setArticles(await res.json()); } catch {} };
     useEffect(() => { fetchArticles(); }, []);
 
-    // --- AI GENERATOR (SIMPLE) ---
+    // --- AI GENERATOR ---
     const handleGenerateAI = async () => {
         if (!newArticle.title || newArticle.title.length < 3) return notify("Isi topik dulu!", "error");
         setIsGenerating(true);
         try {
             const res = await fetch(`${API_URL}/generate-article`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ topic: newArticle.title })
+                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ topic: newArticle.title })
             });
             const data = await res.json();
             if (res.ok) {
@@ -483,13 +496,47 @@ const ArticleManager = ({ onBack, notify }) => {
         finally { setIsGenerating(false); }
     };
 
+    // --- AUTO IMAGE COMPRESSOR (Logic Baru) ---
+    const compressImage = (file, callback) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 800; // Resize lebar maks 800px
+                const scaleSize = MAX_WIDTH / img.width;
+                canvas.width = MAX_WIDTH;
+                canvas.height = img.height * scaleSize;
+
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                // Kompres kualitas jadi 70% JPEG
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                
+                // Cek ukuran (Base64 length kira-kira 1.37x ukuran file asli)
+                // Jika masih > 100KB, turunkan kualitas lagi
+                if (dataUrl.length > 137000) { 
+                     // Rekompresi ekstrim jika masih besar
+                     const extremeUrl = canvas.toDataURL('image/jpeg', 0.5);
+                     callback(extremeUrl);
+                } else {
+                     callback(dataUrl);
+                }
+            };
+        };
+    };
+
     const handleImageUpload = (e) => {
         const file = e.target.files[0];
         if (file) {
-            if (file.size > 500000) return notify("Max 500KB", "error");
-            const reader = new FileReader();
-            reader.onloadend = () => setNewArticle(prev => ({ ...prev, image: reader.result }));
-            reader.readAsDataURL(file);
+            notify("Mengompres gambar...", "info");
+            compressImage(file, (compressedResult) => {
+                setNewArticle(prev => ({ ...prev, image: compressedResult }));
+                notify("Gambar berhasil dikompres!", "success");
+            });
         }
     };
 
@@ -516,7 +563,6 @@ const ArticleManager = ({ onBack, notify }) => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-                {/* EDITOR */}
                 <div className="lg:col-span-1 bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
                     <div>
                         <label className="text-xs font-bold text-blue-900 uppercase ml-1">Topik / Judul</label>
@@ -529,7 +575,7 @@ const ArticleManager = ({ onBack, notify }) => {
                     </div>
 
                     <div onClick={() => fileInputRef.current.click()} className="border-2 border-dashed rounded-xl h-32 flex items-center justify-center cursor-pointer hover:border-orange-400 relative overflow-hidden">
-                        {newArticle.image ? <img src={newArticle.image} className="w-full h-full object-cover"/> : <span className="text-xs text-gray-400 flex flex-col items-center"><FilePlus size={20} className="mb-1"/> Upload Cover (500KB)</span>}
+                        {newArticle.image ? <img src={newArticle.image} className="w-full h-full object-cover"/> : <span className="text-xs text-gray-400 flex flex-col items-center"><FilePlus size={20} className="mb-1"/> Upload Cover (Max 100KB Auto-Compress)</span>}
                     </div>
                     <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
 
@@ -546,33 +592,18 @@ const ArticleManager = ({ onBack, notify }) => {
                     <button onClick={handlePost} className="w-full bg-orange-500 text-white py-3 rounded-xl font-bold hover:bg-orange-600 transition flex justify-center gap-2"><Send size={18}/> Terbitkan</button>
                 </div>
 
-                {/* PREVIEW */}
                 <div className="lg:col-span-2 space-y-4 h-[600px] overflow-y-auto custom-scrollbar pr-2">
                     {articles.map(art => (
-                        <div 
-                            key={art.id} 
-                            onClick={() => setViewArticle(art)} 
-                            className="bg-white p-4 rounded-xl border flex gap-4 hover:shadow-md transition relative group cursor-pointer"
-                        >
+                        <div key={art.id} onClick={() => setViewArticle(art)} className="bg-white p-4 rounded-xl border flex gap-4 hover:shadow-md transition relative group cursor-pointer">
                             <div className="w-32 h-24 bg-gray-100 rounded-lg shrink-0 overflow-hidden">
                                 {art.image && <img src={art.image} className="w-full h-full object-cover"/>}
                             </div>
                             <div className="flex-1">
                                 <h4 className="font-bold text-blue-900 text-lg line-clamp-1 group-hover:text-orange-500 transition">{art.title}</h4>
                                 <p className="text-xs text-gray-400 mb-2">{art.date}</p>
-                                {/* RENDER TEKS BIASA TAPI RAPI */}
                                 <p className="text-sm text-gray-600 line-clamp-2 whitespace-pre-line leading-relaxed">{art.content}</p>
                             </div>
-                            <button 
-                                onClick={(e) => { 
-                                    e.stopPropagation(); 
-                                    handleDelete(art.id); 
-                                }} 
-                                className="absolute top-4 right-4 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition p-2 hover:bg-red-50 rounded-lg"
-                                title="Hapus Artikel"
-                            >
-                                <Trash size={18}/>
-                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); handleDelete(art.id); }} className="absolute top-4 right-4 text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition p-2 hover:bg-red-50 rounded-lg" title="Hapus Artikel"><Trash size={18}/></button>
                         </div>
                     ))}
                 </div>
@@ -617,7 +648,7 @@ const LandingPage = ({ onNavigateToLogin }) => {
         
         {/* KIRI: Logo Aplikasi (SiGemar) */}
         <div className="flex items-center gap-3 z-20 relative shrink-0">
-            <img src="/SiGemar.png" className="h-10 w-auto object-contain" alt="Logo"/>
+            <img src="/SiGemar.png" className="h-12 w-auto object-contain" alt="Logo"/>
             <span className={`text-2xl font-black tracking-tight ${isScrolled ? 'text-blue-900' : 'text-blue-900'} transition-colors`}>
                 <span className="text-orange-500">Si</span>Gemar
             </span>
@@ -1458,12 +1489,12 @@ const ParentDashboard = ({ logs, currentUser, activePage }) => {
     return null;
 };
 
-// --- REGISTRASI SUPER ADMIN (UPDATED: AGAMA DROPDOWN) ---
+// --- REGISTRASI SUPER ADMIN (REVISI: FIX CRASH GEDONGSARI) ---
 const SuperAdminRegistration = ({ onBack, notify, onRefresh }) => {
     const [step, setStep] = useState(1); 
     const [displayUmur, setDisplayUmur] = useState("0 tahun 0 bulan 0 hari");
-    const [isSearchingPos, setIsSearchingPos] = useState(false);
     
+    // State untuk data wilayah API
     const [wilayah, setWilayah] = useState({
         provinsi: [], kota: [], kecamatan: [], kelurahan: []
     });
@@ -1473,17 +1504,19 @@ const SuperAdminRegistration = ({ onBack, notify, onRefresh }) => {
         statusAyah: 'Ayah Kandung', namaAyah: '', nikAyah: '', hpAyah: '', 
         // Data Ibu
         statusIbu: 'Ibu Kandung', namaIbu: '', nikIbu: '', hpIbu: '', 
-        // Data Anak & Lainnya
+        // Data Anak
         nama: '', nikAnak: '', gender: 'L', tempatLahir: '', tglLahir: '', umur: 0, 
-        namaPanggilan: '', golDarah: 'Tidak diketahui', agama: 'Islam', // Default Islam
+        namaPanggilan: '', golDarah: 'Tidak diketahui', agama: 'Islam',
+        // Wilayah & Kontak
         alamat: '', rt: '', rw: '', 
         provinsi: '', kota: '', kecamatan: '', kelurahan: '', 
-        dusun: '',
+        dusun: '', // Khusus Gedongsari
         kodePos: '', email: '', pendapatan: '< 1 Juta', sumberInfo: 'Undangan dari Puskesmas', catatan: '', 
+        // Medis Awal
         berat: '', tinggi: '', lk: '' 
     });
 
-    // 1. Fetch Provinsi
+    // Load Provinsi saat komponen mount
     useEffect(() => {
         fetch(`https://www.emsifa.com/api-wilayah-indonesia/api/provinces.json`)
             .then(response => response.json())
@@ -1494,36 +1527,35 @@ const SuperAdminRegistration = ({ onBack, notify, onRefresh }) => {
     const LIST_DUSUN_GEDONGSARI = [
         "Dusun Balekerso", "Dusun Pistan", "Dusun Janggar", "Dusun Gedongan",
         "Dusun Spatran", "Dusun Pringkudo", "Dusun Gandok" 
-    ];
+    ].map(d => ({ id: d, name: d }));
 
-    // 2. Handle Region
+    // Handler Wilayah Bertingkat
     const handleRegionChange = (e) => {
         const { name, value } = e.target;
         let updatedForm = { ...form, [name]: value };
 
         if (name === 'provinsi') {
-            updatedForm.kota = ''; updatedForm.kecamatan = ''; updatedForm.kelurahan = '';
+            updatedForm.kota = ''; updatedForm.kecamatan = ''; updatedForm.kelurahan = ''; updatedForm.dusun = '';
             setWilayah(prev => ({ ...prev, kota: [], kecamatan: [], kelurahan: [] }));
             fetch(`https://www.emsifa.com/api-wilayah-indonesia/api/regencies/${value}.json`)
                 .then(res => res.json()).then(data => setWilayah(prev => ({ ...prev, kota: data })));
         } else if (name === 'kota') {
-            updatedForm.kecamatan = ''; updatedForm.kelurahan = '';
+            updatedForm.kecamatan = ''; updatedForm.kelurahan = ''; updatedForm.dusun = '';
             setWilayah(prev => ({ ...prev, kecamatan: [], kelurahan: [] }));
             fetch(`https://www.emsifa.com/api-wilayah-indonesia/api/districts/${value}.json`)
                 .then(res => res.json()).then(data => setWilayah(prev => ({ ...prev, kecamatan: data })));
         } else if (name === 'kecamatan') {
-            updatedForm.kelurahan = '';
+            updatedForm.kelurahan = ''; updatedForm.dusun = '';
             setWilayah(prev => ({ ...prev, kelurahan: [] }));
             fetch(`https://www.emsifa.com/api-wilayah-indonesia/api/villages/${value}.json`)
                 .then(res => res.json()).then(data => setWilayah(prev => ({ ...prev, kelurahan: data })));
         }
+        
+        // Reset dusun jika kelurahan berubah (akan divalidasi ulang di render)
         if (name === 'kelurahan') {
-            const selectedKel = wilayah.kelurahan.find(item => item.id === value);
-            const kelName = selectedKel ? selectedKel.name : '';
-            if (!kelName.toUpperCase().includes('GEDONGSARI')) {
-                updatedForm.dusun = ''; 
-            }
+            updatedForm.dusun = '';
         }
+        
         setForm(updatedForm);
     };
 
@@ -1531,12 +1563,14 @@ const SuperAdminRegistration = ({ onBack, notify, onRefresh }) => {
         const { name, value } = e.target; 
         let updatedForm = { ...form, [name]: value }; 
         
+        // Reset field ortu jika status None
         if (name === 'statusAyah' && value === 'None') {
             updatedForm.namaAyah = ''; updatedForm.nikAyah = ''; updatedForm.hpAyah = '';
         }
         if (name === 'statusIbu' && value === 'None') {
             updatedForm.namaIbu = ''; updatedForm.nikIbu = ''; updatedForm.hpIbu = '';
         }
+        // Hitung umur otomatis
         if (name === 'tglLahir') { 
             const hasil = hitungUmurDetail(value); 
             updatedForm.umur = hasil.bulanTotal; 
@@ -1545,76 +1579,80 @@ const SuperAdminRegistration = ({ onBack, notify, onRefresh }) => {
         setForm(updatedForm); 
     };
 
-    // 3. Handle Register
-    const handleRegister = async (e) => { 
-        e.preventDefault(); 
-        
-        if (step !== 4) return;
+    const handleRegister = async (e) => {
+    e.preventDefault(); // Mencegah reload halaman
 
-        if (!form.nama || form.nama.trim() === "") return notify("Nama Anak wajib diisi!", "error");
-        if (!form.nikAnak || form.nikAnak.trim() === "") return notify("NIK Anak wajib diisi!", "error");
-        if (!form.tglLahir) return notify("Tanggal Lahir Anak wajib diisi!", "error");
-        if (!form.provinsi || !form.kota || !form.kecamatan || !form.kelurahan) return notify("Data Wilayah wajib lengkap!", "error");
+    // --- LOGIKA TRAFFIC CONTROLLER ---
+    // Jika belum sampai langkah terakhir (Langkah 4), 
+    // tekan Enter atau klik tombol hanya akan memindahkan ke langkah berikutnya.
+    if (step < 4) {
+        setStep(step + 1);
+        return; // Berhenti di sini, JANGAN lanjut ke API
+    }
 
-        const getRegionName = (list, id) => {
-            const item = list.find(x => x.id === id);
-            return item ? item.name : '';
-        };
+    // --- LOGIKA PENDAFTARAN (Hanya jalan jika step === 4) ---
+    // Validasi dasar sebelum menembak API
+    if (!form.nama || form.nama.trim() === "") return notify("Nama Anak wajib diisi!", "error");
+    if (!form.nikAnak || form.nikAnak.trim() === "") return notify("NIK Anak wajib diisi!", "error");
+    if (!form.tglLahir) return notify("Tanggal Lahir Anak wajib diisi!", "error");
 
-        const DUSUN_COORDINATES = {
-            "Dusun Balekerso":  { lat: -7.2335, lng: 110.1180 },
-            "Dusun Pistan":     { lat: -7.2350, lng: 110.1225 },
-            "Dusun Janggar":    { lat: -7.2365, lng: 110.1190 },
-            "Dusun Gedongan":   { lat: -7.2340, lng: 110.1205 },
-            "Dusun Spatran":    { lat: -7.2325, lng: 110.1215 },
-            "Dusun Pringkudo":  { lat: -7.2355, lng: 110.1175 },
-            "Dusun Gandok":     { lat: -7.2370, lng: 110.1210 }
-        };
-        const DEFAULT_COORD = { lat: -7.2347, lng: 110.1200 };
-
-        let finalLat = DEFAULT_COORD.lat;
-        let finalLng = DEFAULT_COORD.lng;
-
-        if (form.dusun && DUSUN_COORDINATES[form.dusun]) {
-            finalLat = DUSUN_COORDINATES[form.dusun].lat;
-            finalLng = DUSUN_COORDINATES[form.dusun].lng;
-        }
-
-        const jitter = () => (Math.random() - 0.5) * 0.0005; 
-        
-        // Frontend TIDAK MENGHITUNG STATUS.
-        const finalPayload = {
-            ...form,
-            provinsi: getRegionName(wilayah.provinsi, form.provinsi),
-            kota: getRegionName(wilayah.kota, form.kota),
-            kecamatan: getRegionName(wilayah.kecamatan, form.kecamatan),
-            kelurahan: getRegionName(wilayah.kelurahan, form.kelurahan),
-            latitude: finalLat + jitter(),
-            longitude: finalLng + jitter(),
-            berat: form.berat ? parseFloat(form.berat) : 0,
-            tinggi: form.tinggi ? parseFloat(form.tinggi) : 0,
-            lk: form.lk ? parseFloat(form.lk) : 0
-        };
-
-        try { 
-            const res = await fetch(`${API_URL}/iot-data`, { 
-                method: 'POST', 
-                headers: {'Content-Type':'application/json'}, 
-                body: JSON.stringify(finalPayload) 
-            }); 
-            const data = await res.json(); 
-            
-            if(res.ok) { 
-                notify("Registrasi Sukses!", "success"); 
-                onRefresh(); 
-                onBack(); 
-            } else { 
-                notify(data.message || "Gagal menyimpan data", "error"); 
-            } 
-        } catch { 
-            notify("Server Error", "error"); 
-        } 
+    const getRegionName = (list, id) => {
+        const item = list.find(x => x.id === id);
+        return item ? item.name : '';
     };
+
+    // ... (Logika koordinat dusun Anda tetap sama) ...
+    const DUSUN_COORDINATES = {
+        "Dusun Balekerso":  { lat: -7.2335, lng: 110.1180 },
+        "Dusun Pistan":     { lat: -7.2350, lng: 110.1225 },
+        "Dusun Janggar":    { lat: -7.2365, lng: 110.1190 },
+        "Dusun Gedongan":   { lat: -7.2340, lng: 110.1205 },
+        "Dusun Spatran":    { lat: -7.2325, lng: 110.1215 },
+        "Dusun Pringkudo":  { lat: -7.2355, lng: 110.1175 },
+        "Dusun Gandok":     { lat: -7.2370, lng: 110.1210 }
+    };
+    const DEFAULT_COORD = { lat: -7.2347, lng: 110.1200 };
+    let finalLat = DEFAULT_COORD.lat;
+    let finalLng = DEFAULT_COORD.lng;
+    if (form.dusun && DUSUN_COORDINATES[form.dusun]) {
+        finalLat = DUSUN_COORDINATES[form.dusun].lat;
+        finalLng = DUSUN_COORDINATES[form.dusun].lng;
+    }
+
+    const jitter = () => (Math.random() - 0.5) * 0.0005; 
+    
+    const finalPayload = {
+        ...form,
+        provinsi: getRegionName(wilayah.provinsi, form.provinsi),
+        kota: getRegionName(wilayah.kota, form.kota),
+        kecamatan: getRegionName(wilayah.kecamatan, form.kecamatan),
+        kelurahan: getRegionName(wilayah.kelurahan, form.kelurahan),
+        latitude: finalLat + jitter(),
+        longitude: finalLng + jitter(),
+        berat: form.berat ? parseFloat(form.berat) : 0,
+        tinggi: form.tinggi ? parseFloat(form.tinggi) : 0,
+        lk: form.lk ? parseFloat(form.lk) : 0
+    };
+
+    try { 
+        const res = await fetch(`${API_URL}/iot-data`, { 
+            method: 'POST', 
+            headers: {'Content-Type':'application/json'}, 
+            body: JSON.stringify(finalPayload) 
+        }); 
+        const data = await res.json(); 
+        
+        if(res.ok) { 
+            notify("Registrasi Sukses!", "success"); 
+            onRefresh(); 
+            onBack(); 
+        } else { 
+            notify(data.message || "Gagal menyimpan data", "error"); 
+        } 
+    } catch { 
+        notify("Server Error", "error"); 
+    } 
+};
 
     const getStepTitle = () => {
         switch(step) {
@@ -1628,6 +1666,14 @@ const SuperAdminRegistration = ({ onBack, notify, onRefresh }) => {
 
     const isAyahActive = form.statusAyah !== 'None';
     const isIbuActive = form.statusIbu !== 'None';
+
+    // --- FIX CRASH: LOGIKA AMAN UNTUK CEK GEDONGSARI ---
+    const checkIsGedongsari = () => {
+        if (!form.kelurahan || wilayah.kelurahan.length === 0) return false;
+        const selectedKel = wilayah.kelurahan.find(k => k.id === form.kelurahan);
+        // Pastikan selectedKel ada DAN memiliki properti name sebelum di-uppercase
+        return selectedKel && selectedKel.name && selectedKel.name.toUpperCase().includes('GEDONGSARI');
+    };
 
     return (
         <div className="w-full h-full flex flex-col animate-in fade-in">
@@ -1695,7 +1741,6 @@ const SuperAdminRegistration = ({ onBack, notify, onRefresh }) => {
                             <InputField label="Nama Panggilan" name="namaPanggilan" value={form.namaPanggilan} onChange={handleChange}/>
                             <SelectField label="Golongan Darah" name="golDarah" value={form.golDarah} onChange={handleChange}><option>Tidak diketahui</option><option>A</option><option>B</option><option>AB</option><option>O</option></SelectField>
                             
-                            {/* AGAMA JADI DROPDOWN */}
                             <SelectField label="Agama" name="agama" value={form.agama} onChange={handleChange}>
                                 <option value="Islam">Islam</option>
                                 <option value="Kristen">Kristen</option>
@@ -1710,21 +1755,24 @@ const SuperAdminRegistration = ({ onBack, notify, onRefresh }) => {
                     {/* STEP 3: WILAYAH */}
                     {step === 3 && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in slide-in-from-right">
-                            <div className="md:col-span-2 bg-orange-50 p-4 rounded-xl border border-orange-100">
+                             <div className="md:col-span-2 bg-orange-50 p-4 rounded-xl border border-orange-100">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <SearchableSelect label="Provinsi" name="provinsi" value={form.provinsi} onChange={handleRegionChange} options={wilayah.provinsi} />
                                     <SearchableSelect label="Kota/Kab" name="kota" value={form.kota} onChange={handleRegionChange} options={wilayah.kota} disabled={!form.provinsi} />
                                     <SearchableSelect label="Kecamatan" name="kecamatan" value={form.kecamatan} onChange={handleRegionChange} options={wilayah.kecamatan} disabled={!form.kota} />
                                     <SearchableSelect label="Kelurahan" name="kelurahan" value={form.kelurahan} onChange={handleRegionChange} options={wilayah.kelurahan} disabled={!form.kecamatan} />
+                                    
+                                    {/* FIX CRASH GEDONGSARI */}
+                                    {checkIsGedongsari() && (
+                                        <div className="mt-0">
+                                            <SearchableSelect label="Pilih Dusun *" name="dusun" value={form.dusun} onChange={handleChange} options={LIST_DUSUN_GEDONGSARI} />
+                                        </div>
+                                    )}
                                 </div>
-                                {/* DUSUN GEDONGSARI */}
-                                {wilayah.kelurahan.find(k => k.id === form.kelurahan)?.name?.toUpperCase().includes('GEDONGSARI') && (
-                                    <div className="mt-4"><SearchableSelect label="Pilih Dusun *" name="dusun" value={form.dusun} onChange={handleChange} options={LIST_DUSUN_GEDONGSARI} /></div>
-                                )}
-                            </div>
-                            <div className="md:col-span-2"><TextAreaField label="Alamat Lengkap" name="alamat" value={form.alamat} onChange={handleChange}/></div>
-                            <div className="grid grid-cols-2 gap-6"><InputField label="RT" name="rt" value={form.rt} onChange={handleChange}/><InputField label="RW" name="rw" value={form.rw} onChange={handleChange}/></div>
-                            <InputField label="Kode Pos" name="kodePos" value={form.kodePos} onChange={handleChange} />
+                             </div>
+                             <div className="md:col-span-2"><TextAreaField label="Alamat Lengkap" name="alamat" value={form.alamat} onChange={handleChange}/></div>
+                             <div className="grid grid-cols-2 gap-6"><InputField label="RT" name="rt" value={form.rt} onChange={handleChange}/><InputField label="RW" name="rw" value={form.rw} onChange={handleChange}/></div>
+                             <InputField label="Kode Pos" name="kodePos" value={form.kodePos} onChange={handleChange} />
                         </div>
                     )}
 
@@ -1733,12 +1781,12 @@ const SuperAdminRegistration = ({ onBack, notify, onRefresh }) => {
                         <div className="space-y-6 animate-in slide-in-from-right">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <InputField label="Email Ortu" name="email" value={form.email} onChange={handleChange}/>
-                                <SelectField label="Pendapatan Keluarga" name="pendapatan" value={form.pendapatan} onChange={handleChange}><option value="< 1 Juta">Kurang dari Rp 1.000.000</option><option value="1 - 2.5 Juta">Rp 1.000.000 - Rp 2.500.000</option><option value="2.5 - 5 Juta">Rp 2.500.000 - Rp 5.000.000</option><option value="> 5 Juta">Di atas Rp 5.000.000</option><option value="Tidak Tetap">Tidak Tetap</option></SelectField>
-                                <SelectField label="Sumber Info" name="sumberInfo" value={form.sumberInfo} onChange={handleChange}><option>Puskesmas</option><option>Media Sosial</option><option>Lainnya</option></SelectField>
+                                <SelectField label="Pendapatan" name="pendapatan" value={form.pendapatan} onChange={handleChange}><option value="< 1 Juta">Kurang dari Rp 1.000.000</option><option value="1 - 2.5 Juta">Rp 1.000.000 - Rp 2.500.000</option><option value="2.5 - 5 Juta">Rp 2.500.000 - Rp 5.000.000</option><option value="> 5 Juta">Di atas Rp 5.000.000</option><option value="Tidak Tetap">Tidak Tetap</option></SelectField>
+                                <SelectField label="Sumber Info" name="sumberInfo" value={form.sumberInfo} onChange={handleChange}><option>Undangan dari Puskesmas</option><option>Teman/Kerabat</option><option>Media Sosial</option><option>Lainnya</option></SelectField>
                                 <TextAreaField label="Catatan Medis" name="catatan" value={form.catatan} onChange={handleChange}/>
                             </div>
-                            <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200">
-                                <h4 className="font-bold mb-4">Pengukuran Awal (Opsional)</h4>
+                            <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-100">
+                                <h4 className="font-bold text-emerald-900 mb-4">Pengukuran Awal (Opsional)</h4>
                                 <div className="grid grid-cols-3 gap-6">
                                     <InputField label="Berat (kg)" name="berat" type="number" step="0.01" value={form.berat} onChange={handleChange}/>
                                     <InputField label="Tinggi (cm)" name="tinggi" type="number" step="0.1" value={form.tinggi} onChange={handleChange}/>
@@ -1748,20 +1796,30 @@ const SuperAdminRegistration = ({ onBack, notify, onRefresh }) => {
                         </div>
                     )}
                 </div>
-
                 <div className="flex justify-between items-center pt-6 border-t border-gray-100 mt-auto">
-                    {step > 1 ? (
-                        <button type="button" onClick={()=>setStep(s=>s-1)} className="px-6 py-3 bg-gray-100 hover:bg-gray-200 rounded-xl font-bold text-gray-600 transition">Kembali</button>
-                    ) : (
-                        <button type="button" onClick={onBack} className="px-6 py-3 text-red-500 hover:bg-red-50 rounded-xl font-bold transition">Batal</button>
-                    )}
-                    
-                    {step < 4 ? (
-                        <button type="button" onClick={()=>setStep(s=>s+1)} className="px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold shadow-md transition">Selanjutnya</button>
-                    ) : (
-                        <button type="submit" className="px-8 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold shadow-md transition">Simpan Data Lengkap</button>
-                    )}
-                </div>
+    {step > 1 ? (
+        // Tombol Kembali HARUS type="button" agar tidak memicu handleRegister
+        <button type="button" onClick={() => setStep(s => s - 1)} className="px-6 py-3 bg-gray-100 hover:bg-gray-200 rounded-xl font-bold text-gray-600 transition">
+            Kembali
+        </button>
+    ) : (
+        <button type="button" onClick={onBack} className="px-6 py-3 text-red-500 hover:bg-red-50 rounded-xl font-bold transition">
+            Batal
+        </button>
+    )}
+    
+    {step < 4 ? (
+        // Tombol Selanjutnya menggunakan type="submit" agar konsisten dengan tombol Enter
+        <button type="submit" className="px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-bold shadow-md transition">
+            Selanjutnya
+        </button>
+    ) : (
+        // Tombol Final
+        <button type="submit" className="px-8 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold shadow-md transition">
+            Simpan Data Lengkap
+        </button>
+    )}
+</div>
             </form>
         </div>
     );
@@ -1831,6 +1889,8 @@ const DashboardHome = ({ onNavigate, logs, refreshLogs, notify, userRole, setReg
   // --- FILTER BARU UNTUK GRAFIK ---
   const [timeFilter, setTimeFilter] = useState('all'); // 'week', 'month', 'all'
   const [genderFilter, setGenderFilter] = useState('all'); // Tambahan: Filter Gender
+  // Di dalam DashboardHome
+const [chartMetric, setChartMetric] = useState('stunting'); // Default: stunting
 
   // LIST DUSUN TARGET (Sesuai request)
   const TARGET_DUSUNS = [
@@ -1838,18 +1898,15 @@ const DashboardHome = ({ onNavigate, logs, refreshLogs, notify, userRole, setReg
     "Dusun Spatran", "Dusun Pringkudo", "Dusun Gandok"
   ];
 
-  // LOGIKA AGREGASI DATA GRAFIK
+ // LOGIKA AGREGASI DATA GRAFIK (UPDATED)
   const chartData = useMemo(() => {
       const now = new Date();
       
-      // 1. Filter Data Berdasarkan Waktu & Gender
       const filteredBase = safeLogs.filter(log => {
           // Filter Waktu
           if (timeFilter !== 'all') {
-              // Parsing tanggal format "DD/MM/YYYY, HH:mm:ss" atau fallback ke object Date
               const dateStr = log.waktuSubmit ? log.waktuSubmit.split(',')[0].split('/').reverse().join('-') : null;
-              const logDate = dateStr ? new Date(dateStr) : new Date(); // Fallback date jika null
-              
+              const logDate = dateStr ? new Date(dateStr) : new Date(); 
               if (timeFilter === 'week') {
                   const oneWeekAgo = new Date();
                   oneWeekAgo.setDate(now.getDate() - 7);
@@ -1861,37 +1918,55 @@ const DashboardHome = ({ onNavigate, logs, refreshLogs, notify, userRole, setReg
                   if (logDate < oneMonthAgo) return false;
               }
           }
-
           // Filter Gender
-          if (genderFilter !== 'all' && log.gender !== genderFilter) {
-              return false;
-          }
-
+          if (genderFilter !== 'all' && log.gender !== genderFilter) return false;
           return true;
       });
 
-      // 2. Hitung Jumlah Stunting per Dusun
       return TARGET_DUSUNS.map(dusunName => {
-          // Cari anak yang tinggal di dusun ini DAN statusnya Stunting/Risiko
-          const count = filteredBase.filter(log => 
-              log.dusun === dusunName && 
-              log.status && (log.status.includes('Stunting') || log.status.includes('Risiko'))
-          ).length;
+          const dusunLogs = filteredBase.filter(log => log.dusun === dusunName);
+          let count = 0;
+
+          // LOGIKA FILTER KATEGORI (STRICT)
+          if (chartMetric === 'stunting') {
+              count = dusunLogs.filter(log => log.status?.includes('Stunting') || log.status?.includes('Risiko')).length;
+          } else if (chartMetric === 'normal') {
+              count = dusunLogs.filter(log => log.status === 'Normal').length;
+          } else if (chartMetric === 'overweight') {
+              count = dusunLogs.filter(log => log.status?.includes('Overweight')).length;
+          } else if (chartMetric === 'abnormal') {
+              count = dusunLogs.filter(log => {
+                  const s = log.status || '';
+                  const isNormal = s === 'Normal';
+                  const isStunting = s.includes('Stunting') || s.includes('Risiko');
+                  const isOverweight = s.includes('Overweight');
+                  const isWaiting = s === 'Menunggu Data' || s === '' || s === '-';
+                  return !isNormal && !isStunting && !isOverweight && !isWaiting;
+              }).length;
+          }
 
           return {
-              name: dusunName.replace('Dusun ', ''), // Persingkat nama label X agar muat (Balekerso, Pistan, dst)
+              name: dusunName.replace('Dusun ', ''), 
               kasus: count,
-              fullDusun: dusunName // Nama lengkap untuk tooltip
+              fullDusun: dusunName 
           };
       });
-  }, [safeLogs, timeFilter, genderFilter]);
+  }, [safeLogs, timeFilter, genderFilter, chartMetric]);
 
   // Statistik Kartu Atas (Tetap menggunakan seluruh data logs yang ada)
   const filteredLogs = safeLogs; 
-  const countNormal = safeLogs.filter(item => item.status?.includes('Normal')).length;
+  const countNormal = safeLogs.filter(item => item.status === 'Normal').length;
   const countOverweight = safeLogs.filter(item => item.status?.includes('Overweight')).length;
-  const countStunting = safeLogs.filter(item => item.status && (item.status.includes('Stunting') || item.status.includes('Risiko'))).length;
-  
+  const countStunting = safeLogs.filter(item => item.status?.includes('Stunting') || item.status?.includes('Risiko')).length;
+  const countAbnormal = safeLogs.filter(item => {
+    const s = item.status || '';
+    const isNormal = s === 'Normal';
+    const isStunting = s.includes('Stunting') || s.includes('Risiko');
+    const isOverweight = s.includes('Overweight');
+    const isWaiting = s === 'Menunggu Data' || s === '' || s === '-';
+    return !isNormal && !isStunting && !isOverweight && !isWaiting;
+  }).length;
+
   const [selectedChildForAI, setSelectedChildForAI] = useState(null);
 
   const handleToggleView = (mode) => {
@@ -1921,22 +1996,35 @@ const DashboardHome = ({ onNavigate, logs, refreshLogs, notify, userRole, setReg
       </div>
       
       {/* STATS CARDS */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6 mb-8">
+        {/* Kartu 1: Total Data */}
         <div onClick={() => onNavigate('view-all')} className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-4 cursor-pointer hover:shadow-md hover:border-blue-300 transition group">
             <div className="p-3 rounded-xl bg-blue-100 text-blue-600"><Users size={24}/></div>
             <div><p className="text-gray-500 text-sm font-bold mb-1">Total Data</p><h3 className="text-3xl font-black text-blue-900">{filteredLogs.length}</h3></div>
         </div>
+
+        {/* Kartu 2: Normal */}
         <div onClick={() => onNavigate('view-normal')} className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-4 cursor-pointer hover:shadow-md hover:border-emerald-300 transition group">
             <div className="p-3 rounded-xl bg-emerald-100 text-emerald-600"><CheckCircle size={24}/></div>
             <div><p className="text-gray-500 text-sm font-bold mb-1">Normal</p><h3 className="text-3xl font-black text-emerald-600">{countNormal}</h3></div>
         </div>
+
+        {/* Kartu 3: Overweight */}
         <div onClick={() => onNavigate('view-overweight')} className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-4 cursor-pointer hover:shadow-md hover:border-purple-300 transition group">
             <div className="p-3 rounded-xl bg-purple-100 text-purple-600"><Scale size={24}/></div>
             <div><p className="text-gray-500 text-sm font-bold mb-1">Overweight</p><h3 className="text-3xl font-black text-purple-600">{countOverweight}</h3></div>
         </div>
+
+        {/* Kartu 4: Stunting */}
         <div onClick={() => onNavigate('view-stunting')} className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-4 cursor-pointer hover:shadow-md hover:border-red-300 transition group">
             <div className="p-3 rounded-xl bg-red-100 text-red-600"><AlertTriangle size={24}/></div>
             <div><p className="text-gray-500 text-sm font-bold mb-1">Stunting</p><h3 className="text-3xl font-black text-red-600">{countStunting}</h3></div>
+        </div>
+
+        {/* [KARTU BARU] Kartu 5: Abnormal */}
+        <div onClick={() => onNavigate('view-abnormal')} className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-4 cursor-pointer hover:shadow-md hover:border-orange-300 transition group">
+            <div className="p-3 rounded-xl bg-orange-100 text-orange-600"><ShieldAlert size={24}/></div>
+            <div><p className="text-gray-500 text-sm font-bold mb-1">Abnormal</p><h3 className="text-3xl font-black text-orange-600">{countAbnormal}</h3></div>
         </div>
       </div>
       
@@ -1948,25 +2036,49 @@ const DashboardHome = ({ onNavigate, logs, refreshLogs, notify, userRole, setReg
                 <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-gray-200 shadow-sm h-fit animate-in fade-in">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                         <h2 className="text-lg font-bold text-blue-900 flex items-center gap-2">
-                            {viewMode === 'chart' ? <><Activity className="text-orange-500"/> Kasus Stunting per Dusun</> : <><MapPin className="text-orange-500"/> Peta Sebaran</>}
+                            {viewMode === 'chart' ? <><Activity className="text-orange-500"/> Kondisi per Dusun</> : <><MapPin className="text-orange-500"/> Peta Sebaran</>}
                         </h2>
                         
-                        {/* FILTER CONTROL (Hanya muncul di mode Grafik) */}
-                        {viewMode === 'chart' && (
-                            <div className="flex gap-2">
-                                <select value={timeFilter} onChange={(e)=>setTimeFilter(e.target.value)} className="bg-gray-50 border border-gray-200 text-gray-700 text-xs rounded-lg px-3 py-2 outline-none font-bold cursor-pointer hover:border-orange-500 transition">
-                                    <option value="all">Semua Waktu</option>
-                                    <option value="month">Bulan Ini</option>
-                                    <option value="week">Minggu Ini</option>
-                                </select>
-                                <select value={genderFilter} onChange={(e)=>setGenderFilter(e.target.value)} className="bg-gray-50 border border-gray-200 text-gray-700 text-xs rounded-lg px-3 py-2 outline-none font-bold cursor-pointer hover:border-orange-500 transition">
-                                    <option value="all">Semua Gender</option>
-                                    <option value="L">Laki-laki</option>
-                                    <option value="P">Perempuan</option>
-                                </select>
-                            </div>
-                        )}
-                    </div>
+                       {/* KANAN: Kontainer Semua Filter (Hanya muncul jika mode Chart) */}
+    {viewMode === 'chart' && (
+        <div className="flex flex-wrap items-center gap-2">
+            {/* 1. Filter Kategori (Gizi/Abnormal/Stunting) */}
+            <select 
+                value={chartMetric} 
+                onChange={(e) => setChartMetric(e.target.value)} 
+                className="bg-white border border-gray-200 text-gray-700 text-xs rounded-lg px-3 py-2 outline-none font-bold cursor-pointer hover:border-orange-500 transition shadow-sm"
+            >
+                <option value="stunting">Kategori: Stunting</option>
+                <option value="normal">Kategori: Normal</option>
+                <option value="overweight">Kategori: Overweight</option>
+                <option value="abnormal">Kategori: Abnormal</option>
+            </select>
+
+            {/* 2. Filter Waktu */}
+            <select 
+                value={timeFilter} 
+                onChange={(e) => setTimeFilter(e.target.value)} 
+                className="bg-white border border-gray-200 text-gray-700 text-xs rounded-lg px-3 py-2 outline-none font-bold cursor-pointer hover:border-orange-500 transition shadow-sm"
+            >
+                <option value="all">Semua Waktu</option>
+                <option value="month">Bulan Ini</option>
+                <option value="week">Minggu Ini</option>
+            </select>
+
+            {/* 3. Filter Gender */}
+            <select 
+                value={genderFilter} 
+                onChange={(e) => setGenderFilter(e.target.value)} 
+                className="bg-white border border-gray-200 text-gray-700 text-xs rounded-lg px-3 py-2 outline-none font-bold cursor-pointer hover:border-orange-500 transition shadow-sm"
+            >
+                <option value="all">Semua Gender</option>
+                <option value="L">Laki-laki</option>
+                <option value="P">Perempuan</option>
+            </select>
+        </div>
+    )}
+</div>
+        
                     
                     <div className="h-80 w-full text-xs font-medium">
                         {viewMode === 'chart' ? (
@@ -1996,15 +2108,23 @@ const DashboardHome = ({ onNavigate, logs, refreshLogs, notify, userRole, setReg
                                     /> 
                                     <Legend wrapperStyle={{paddingTop: '20px'}}/>
                                     <Bar 
-                                        dataKey="kasus" 
-                                        name="Kasus Stunting" 
-                                        radius={[6, 6, 0, 0]} 
-                                        barSize={40}
-                                    >
-                                        {chartData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={entry.kasus > 0 ? '#ef4444' : '#e2e8f0'} />
-                                        ))}
-                                    </Bar>
+    dataKey="kasus" 
+    name={`Jumlah ${chartMetric.charAt(0).toUpperCase() + chartMetric.slice(1)}`}
+    radius={[6, 6, 0, 0]} 
+    barSize={40}
+>
+    {/* --- STEP 4: LOGIKA WARNA DINAMIS --- */}
+    {chartData.map((entry, index) => {
+        let barColor = '#e2e8f0'; // Default warna abu jika 0 kasus
+        if (entry.kasus > 0) {
+            if (chartMetric === 'stunting') barColor = '#ef4444';   // Merah
+            if (chartMetric === 'normal') barColor = '#10b981';     // Hijau
+            if (chartMetric === 'overweight') barColor = '#8b5cf6'; // Ungu
+            if (chartMetric === 'abnormal') barColor = '#f59e0b';   // Oranye (Tinggi Lebih/Macro)
+        }
+        return <Cell key={`cell-${index}`} fill={barColor} />;
+    })}
+</Bar>
                                 </BarChart>
                             </ResponsiveContainer>
                         ) : (
@@ -2418,7 +2538,7 @@ const UnifiedTableView = ({ onBack, data, title, category, notify, userRole, onR
                             <span className={`text-[9px] font-bold uppercase mt-1 flex items-center gap-1 ${ui.color}`}>
                                 {ui.label} {ui.icon}
                             </span>
-                            <span className="text-[9px] text-gray-500 mt-0.5">Std: {ui.rangeText}</span>
+                            <span className="text-[9px] text-gray-500 mt-0.5">Normal: {ui.rangeText}</span>
                         </>
                     )}
                 </div>
@@ -2498,11 +2618,12 @@ const UnifiedTableView = ({ onBack, data, title, category, notify, userRole, onR
 
 // --- CUSTOM INPUT STYLE (ORANGE THEME) ---
 const OrangeInput = ({ label, name, type="text", value, onChange, placeholder, isPass }) => {
-    const [showPassword, setShowPassword] = useState(false); // State lokal untuk mata
-
+    const [showPassword, setShowPassword] = useState(false);
     return (
-        <div className="mb-4">
-            <label className="block text-[10px] font-bold text-blue-900 uppercase tracking-wider mb-2 ml-1">{label}</label>
+        <div className="mb-5"> {/* UBAH DARI mb-4 JADI mb-5 */}
+            <label className="block text-xs font-bold text-blue-900 uppercase tracking-wider mb-2 ml-1">
+                {label}
+            </label>
             <div className="relative">
                 <input 
                     type={isPass ? (showPassword ? "text" : "password") : type}
@@ -2515,7 +2636,11 @@ const OrangeInput = ({ label, name, type="text", value, onChange, placeholder, i
                     autoComplete="off"
                 />
                 {isPass && (
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-orange-500 transition">
+                    <button 
+                        type="button" 
+                        onClick={() => setShowPassword(!showPassword)} 
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-orange-500 transition"
+                    >
                         {showPassword ? <EyeOff size={18}/> : <Eye size={18}/>}
                     </button>
                 )}
@@ -2664,7 +2789,7 @@ const AuthPage = ({ onLoginSuccess, notify, onBackToHome }) => {
                 
                 {/* Logo Section */}
                 <div className="text-center mb-8">
-                    <img src="/SiGemar.png" className="h-20 mx-auto mb-4 object-contain drop-shadow-sm" alt="Logo"/>
+                    <img src="/SiGemar.png" className="h-32 mx-auto mb0 object-contain drop-shadow-sm" alt="Logo"/>
                     <h2 className="text-3xl font-black text-blue-900 mb-1">
                         {mode === 'login' && 'Selamat Datang'}
                         {mode === 'register' && 'Buat Akun Baru'}
@@ -2708,15 +2833,27 @@ const AuthPage = ({ onLoginSuccess, notify, onBackToHome }) => {
 
                 {/* --- REGISTER FORM --- */}
                 {mode === 'register' && (
-                    <form onSubmit={handleSubmit} className="space-y-1">
-                        <div className="mb-4">
-                            <label className="block text-[10px] font-bold text-blue-900 uppercase tracking-wider mb-2 ml-1">Peran Pengguna</label>
-                            <select name="role" value={form.role} onChange={handleChange} className="w-full bg-white border border-gray-300 text-gray-700 text-sm rounded-xl px-4 py-3.5 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all shadow-sm appearance-none">
-                                <option value="ortu">Orang Tua</option>
-                                <option value="kades">Kepala Desa</option>
-                                <option value="nakes">Tenaga Medis</option>
-                                <option value="superadmin">Super Admin</option>
-                            </select>
+                    <form onSubmit={handleSubmit} className="mt-6 space-y-2"> {/* Tambah margin top */}
+                        
+                        <div className="mb-5"> {/* Tambah margin bottom agar tidak nempel username */}
+                            <label className="block text-xs font-bold text-blue-900 uppercase tracking-wider mb-2 ml-1">Peran Pengguna</label>
+                            <div className="relative">
+                                <select 
+                                    name="role" 
+                                    value={form.role} 
+                                    onChange={handleChange} 
+                                    className="w-full bg-white border border-gray-300 text-gray-700 text-sm rounded-xl px-4 py-3.5 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-all shadow-sm appearance-none cursor-pointer"
+                                >
+                                    <option value="ortu">Orang Tua</option>
+                                    <option value="kades">Kepala Desa</option>
+                                    <option value="nakes">Tenaga Medis</option>
+                                    <option value="superadmin">Super Admin</option>
+                                </select>
+                                {/* Icon panah dropdown manual supaya lebih cantik */}
+                                <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-500">
+                                    <ChevronDown size={16} />
+                                </div>
+                            </div>
                         </div>
 
                         <OrangeInput label="Username" name="username" placeholder="Buat username unik" value={form.username} onChange={handleChange} />
@@ -2724,26 +2861,27 @@ const AuthPage = ({ onLoginSuccess, notify, onBackToHome }) => {
                         <OrangeInput label="NIK (KTP/KK)" name="nik" type="number" placeholder="16 Digit NIK" value={form.nik} onChange={handleChange} />
                         <OrangeInput label="Password" name="password" placeholder="Buat password kuat" value={form.password} onChange={handleChange} isPass />
 
-                        <button disabled={loading} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-orange-500/30 transition active:scale-95 mt-4 mb-4 flex justify-center items-center gap-2">
-                             {loading ? <RefreshCw className="animate-spin" size={20}/> : <>Daftar Sekarang <CheckCircle size={20}/></>}
-                        </button>
+                        <div className="pt-2"> {/* Tambah padding top sebelum tombol */}
+                            <button disabled={loading} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-orange-500/30 transition active:scale-95 mb-6 flex justify-center items-center gap-2">
+                                {loading ? <RefreshCw className="animate-spin" size={20}/> : <>Daftar Sekarang <CheckCircle size={20}/></>}
+                            </button>
+                        </div>
 
-                        {/* --- TOMBOL GOOGLE DI REGISTER (ADDED) --- */}
-                        <div className="relative flex py-2 items-center mb-4">
+                        {/* --- TOMBOL GOOGLE DI REGISTER --- */}
+                        <div className="relative flex py-2 items-center mb-6">
                             <div className="flex-grow border-t border-gray-200"></div>
-                            <span className="flex-shrink-0 mx-4 text-[10px] font-bold text-gray-400 uppercase">Atau daftar dengan</span>
+                            <span className="flex-shrink-0 mx-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Atau daftar dengan</span>
                             <div className="flex-grow border-t border-gray-200"></div>
                         </div>
 
-                        <button type="button" onClick={() => loginToGoogle()} className="w-full bg-white border border-gray-200 text-gray-600 font-bold py-3.5 rounded-xl hover:bg-gray-50 transition active:scale-95 flex items-center justify-center gap-2 mb-6">
+                        <button type="button" onClick={() => loginToGoogle()} className="w-full bg-white border border-gray-200 text-gray-600 font-bold py-3.5 rounded-xl hover:bg-gray-50 transition active:scale-95 flex items-center justify-center gap-2 mb-8">
                             <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-5 h-5" alt="G"/>
                             Daftar dengan Google
                         </button>
-                        {/* ----------------------------------------- */}
                         
-                        <div className="text-center pt-2 border-t border-gray-100">
+                        <div className="text-center pt-4 border-t border-gray-100">
                             <p className="text-sm text-gray-500">
-                                Sudah punya akun? <button type="button" onClick={() => setMode('login')} className="font-bold text-orange-500 hover:text-orange-600 transition">Login disini</button>
+                                Sudah punya akun    ? <button type="button" onClick={() => setMode('login')} className="font-bold text-orange-500 hover:text-orange-600 transition ml-1">Login disini</button>
                             </p>
                         </div>
                     </form>
@@ -2841,6 +2979,8 @@ const MainApp = () => {
       if (activePage === 'profile') return <UserProfile user={currentUser} onUpdateUser={handleUpdateUser} notify={notify} />;
       
       if (currentUser.role === 'ortu') return <ParentDashboard logs={logs} currentUser={currentUser} activePage={activePage} />;
+
+      if (activePage === 'user-approval') return <UserApproval notify={notify} />;
       
       if (['nakes', 'superadmin', 'kades'].includes(currentUser.role)) {
           if (currentUser.role === 'superadmin') {
@@ -3068,6 +3208,62 @@ const UserProfile = ({ user, onUpdateUser, notify }) => {
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    );
+};
+
+// Tambahkan UserCheck, UserX ke dalam list import Lucide di paling atas file jika belum ada
+const UserApproval = ({ notify }) => {
+    const [pendingUsers, setPendingUsers] = useState([]);
+    const fetchPending = async () => {
+        try {
+            const res = await fetch(`${API_URL}/users/pending`);
+            if (res.ok) setPendingUsers(await res.json());
+        } catch (e) { notify("Gagal memuat antrean", "error"); }
+    };
+    useEffect(() => { fetchPending(); }, []);
+
+    const handleAction = async (id, action) => {
+        const endpoint = action === 'approve' ? `/users/approve/${id}` : `/users/reject/${id}`;
+        try {
+            const res = await fetch(`${API_URL}${endpoint}`, { method: action === 'approve' ? 'PUT' : 'DELETE' });
+            if (res.ok) {
+                notify(action === 'approve' ? "Akun Berhasil Aktif!" : "Akun Berhasil Dihapus", "success");
+                fetchPending();
+            }
+        } catch (e) { notify("Gagal memproses", "error"); }
+    };
+
+    return (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden animate-in fade-in">
+            <div className="p-6 border-b border-gray-100 bg-gray-50/50">
+                <h2 className="text-xl font-black text-blue-900 flex items-center gap-2"><ShieldCheck className="text-orange-500" /> Persetujuan Akun Baru</h2>
+                <p className="text-sm text-gray-500 mt-1">Verifikasi akun perangkat desa atau nakes sebelum mereka bisa masuk ke sistem.</p>
+            </div>
+            <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                    <tbody className="divide-y divide-gray-50">
+                        {pendingUsers.length === 0 ? (
+                            <tr><td className="p-10 text-center text-gray-400 font-medium">Tidak ada antrean persetujuan.</td></tr>
+                        ) : (
+                            pendingUsers.map(u => (
+                                <tr key={u.id} className="hover:bg-gray-50 transition">
+                                    <td className="p-4">
+                                        <div className="font-bold text-blue-900">{u.full_name || u.username}</div>
+                                        <div className="text-[10px] text-gray-400">{u.email}</div>
+                                    </td>
+                                    <td className="p-4"><span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${getRoleColor(u.role)}`}>{getRoleLabel(u.role)}</span></td>
+                                    <td className="p-4 font-mono text-xs">{u.nik || '-'}</td>
+                                    <td className="p-4 text-right flex justify-end gap-2">
+                                        <button onClick={() => handleAction(u.id, 'reject')} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition" title="Tolak"><Trash size={18}/></button>
+                                        <button onClick={() => handleAction(u.id, 'approve')} className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg font-bold text-xs transition shadow-sm">Setujui</button>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
             </div>
         </div>
     );
