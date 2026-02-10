@@ -2663,35 +2663,37 @@ const AuthPage = ({ onLoginSuccess, notify, onBackToHome }) => {
 
     const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
-    // --- HANDLER: LOGIN & REGISTER ---
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setLoading(true);
-        try {
-            const res = await fetch(`${API_URL}/${mode === 'login' ? 'login' : 'register'}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(form)
-            });
-            const data = await res.json();
+    // --- UPDATE DI App.jsx (Komponen AuthPage) ---
+const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+        const res = await fetch(`${API_URL}/${mode === 'login' ? 'login' : 'register'}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(form)
+        });
 
-            if (res.ok) {
-                if (mode === 'login') {
-                    notify("Selamat Datang Bunda/Ayah!", "success");
-                    onLoginSuccess(data.user);
-                } else {
-                    notify(data.message, "success");
-                    setMode('login');
-                }
+        const data = await res.json();
+
+        // VALIDASI KRUSIAL
+        if (res.ok) { 
+            // Hanya jalankan ini jika server kirim status 200 OK
+            if (mode === 'login') {
+                notify("Selamat Datang!", "success");
+                onLoginSuccess(data.user);
             } else {
-                notify(data.message || "Gagal masuk ke sistem", "error");
+                notify(data.message, "success");
+                setMode('login');
             }
-        } catch (err) {
-            notify("Masalah koneksi ke server", "error");
-        } finally {
-            setLoading(false);
+        } else {
+            // JIKA res.status adalah 403, 401, atau 500
+            // Tampilkan pesan error dan JANGAN login-kan user
+            notify(data.message || "Gagal masuk ke sistem", "error");
         }
-    };
+    } catch (err) {
+        notify("Masalah koneksi ke server", "error");
+    }
+};
 
     // --- HANDLER: STEP 1 - KIRIM OTP ---
     const handleForgotPassword = async (e) => {
@@ -3158,7 +3160,7 @@ const UserProfile = ({ user, onUpdateUser, notify }) => {
 const UserApproval = ({ notify }) => {
     const [pendingUsers, setPendingUsers] = useState([]);
     const fetchPending = async () => {
-        try {       
+        try {
             const res = await fetch(`${API_URL}/users/pending`);
             if (res.ok) setPendingUsers(await res.json());
         } catch (e) { notify("Gagal memuat antrean", "error"); }

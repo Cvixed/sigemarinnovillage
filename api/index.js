@@ -220,48 +220,30 @@ app.get('/api/health', (req, res) => {
 // Di dalam /api/setup-db, update create table users:
 // status VARCHAR(20) DEFAULT 'pending'
 
-// --- UPDATE DI api/index.js ---
+// --- 1. UPDATE LOGIN (api/index.js) ---
 app.post('/api/login', async (req, res) => {
     try {
         const { username, password } = req.body;
-        
-        // Ambil user dari DB
         const { rows } = await sql`SELECT * FROM users WHERE username = ${username}`;
-        const user = rows[0];
-
-        // 1. Validasi Keberadaan User & Password
-        if (!user || user.password !== password) {
-            return res.status(401).json({ message: "Username atau Password salah!" });
+        
+        if (rows.length === 0 || rows[0].password !== password) {
+            return res.status(401).json({ message: "Username atau Password salah" });
         }
 
-        // 2. LOGIKA PENYARINGAN STATUS (Gembok Utama)
-        // Kita paksa ubah ke lowercase agar tidak ada masalah huruf besar/kecil
-        const currentStatus = (user.status || 'pending').toLowerCase();
+        const user = rows[0];
 
-        if (currentStatus !== 'active') {
-            // Jika status bukan 'active', kita berikan status 403 (Forbidden)
-            // Dan kita PAKSA return agar kode di bawahnya tidak jalan
-            console.log(`Blokir login: User ${username} statusnya masih ${currentStatus}`);
+        // CEK STATUS APPROVAL
+        if (user.status === 'pending') {
             return res.status(403).json({ 
-                message: `Akun Anda (${username}) berstatus ${currentStatus.toUpperCase()}. Mohon hubungi Super Admin untuk aktivasi.` 
+                message: "Akun Anda belum disetujui oleh Super Admin. Mohon tunggu nggih Bunda/Ayah." 
             });
         }
 
-        // 3. Hanya jika statusnya 'active' barulah kode ini bisa diakses
         res.json({ 
-            message: "Login Berhasil", 
-            user: { 
-                username: user.username, 
-                role: user.role, 
-                fullName: user.full_name,
-                nik: user.nik 
-            } 
+            message: "Login Sukses", 
+            user: { username: user.username, role: user.role, fullName: user.full_name, nik: user.nik } 
         });
-
-    } catch (err) {
-        console.error("Login Error:", err);
-        res.status(500).json({ message: "Server error saat login." });
-    }
+    } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
 // --- 2. TAMBAH ROUTE APPROVAL (api/index.js) ---
