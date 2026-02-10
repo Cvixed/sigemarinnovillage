@@ -2719,35 +2719,34 @@ const AuthPage = ({ onLoginSuccess, notify, onBackToHome }) => {
         }
     };
 
-    // --- HANDLER: STEP 2 - RESET PASSWORD ---
     const handleResetPassword = async (e) => {
-        e.preventDefault();
-        setLoading(true);
-        try {
-            const res = await fetch(`${API_URL}/reset-password`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    email: form.email, 
-                    otp: form.otp, 
-                    newPassword: form.newPassword 
-                })
-            });
-            const data = await res.json();
-
-            if (res.ok) {
-                notify("Password berhasil diperbarui! Silakan login", "success");
-                setMode('login'); // Selesai, baru kembali ke login
-                setForgotStep(1); // Reset step ke awal
-            } else {
-                notify(data.message || "Kode OTP salah atau kadaluwarsa", "error");
-            }
-        } catch (err) {
-            notify("Gagal mereset password", "error");
-        } finally {
-            setLoading(false);
+    e.preventDefault();
+    setLoading(true);
+    try {
+        // Pastikan API_URL sudah benar dan endpoint-nya /reset-password
+        const res = await fetch(`${API_URL}/reset-password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                email: form.email, 
+                otp: form.otp, 
+                newPassword: form.newPassword 
+            })
+        });
+        
+        const data = await res.json();
+        if (res.ok) {
+            notify("Password Berhasil Diganti!", "success");
+            setMode('login'); // Kembali ke menu login
+        } else {
+            notify(data.message, "error");
         }
-    };
+    } catch (err) {
+        notify("Gagal mereset password", "error");
+    } finally {
+        setLoading(false);
+    }
+};
 
     // ... (Fungsi loginToGoogle tetap sama seperti kode Anda) ...
 

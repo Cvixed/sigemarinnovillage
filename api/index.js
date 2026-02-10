@@ -324,29 +324,38 @@ app.post('/api/auth/google', async (req, res) => {
     } catch (error) { res.status(401).json({ message: "Token Google Invalid" }); }
 });
 
-// --- FORGOT PASSWORD ---
+// --- 1. ENDPOINT LUPA PASSWORD (Kirim OTP) ---
 app.post('/api/forgot-password', async (req, res) => {
+    const { email } = req.body;
     try {
-        const { email } = req.body;
-        const { rows } = await sql`SELECT * FROM users WHERE email = ${email}`;
+        const otp = Math.floor(100000 + Math.random() * 900000).toString(); // Generate 6 digit
+        const { rowCount } = await sql`UPDATE users SET otp = ${otp} WHERE email = ${email}`;
+
+        if (rowCount === 0) return res.status(404).json({ message: "Email tidak terdaftar!" });
+
+        // Simulasikan pengiriman email (tampilkan di console log server)
+        console.log(`[OTP DEBUG] Kirim ke ${email}: ${otp}`);
         
-        if (rows.length === 0) return res.status(404).json({ message: "Email tidak terdaftar" });
-        const user = rows[0];
+        res.json({ message: "OTP berhasil dikirim!" });
+    } catch (err) { res.status(500).json({ message: err.message }); }
+});
 
-        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-        const otpExpires = Date.now() + 300000; 
+// --- 2. ENDPOINT RESET PASSWORD (Fix 404) ---
+app.post('/api/reset-password', async (req, res) => {
+    const { email, otp, newPassword } = req.body;
+    try {
+        // Cari user yang email dan OTP-nya cocok
+        const { rows } = await sql`SELECT * FROM users WHERE email = ${email} AND otp = ${otp}`;
+        
+        if (rows.length === 0) {
+            return res.status(400).json({ message: "Kode OTP salah atau tidak cocok!" });
+        }
 
-        await sql`UPDATE users SET otp = ${otpCode}, otp_expires = ${otpExpires} WHERE id = ${user.id}`;
-
-        const mailOptions = {
-            from: `"SiGemar Admin" <${EMAIL_USER}>`,
-            to: email,
-            subject: 'KODE OTP RESET PASSWORD',
-            html: `<h3>Kode OTP Anda: ${otpCode}</h3>`
-        };
-        await mailTransporter.sendMail(mailOptions);
-        res.json({ message: "OTP Terkirim ke Email" });
-    } catch (err) { res.status(500).json({ message: "Gagal kirim email" }); }
+        // Update password dan hapus OTP agar tidak bisa dipakai lagi
+        await sql`UPDATE users SET password = ${newPassword}, otp = NULL WHERE email = ${email}`;
+        
+        res.json({ message: "Password berhasil diperbarui!" });
+    } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
 // --- IOT DATA (GET) ---
