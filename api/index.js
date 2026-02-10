@@ -316,52 +316,42 @@ app.post('/api/auth/google', async (req, res) => {
     } catch (error) { res.status(401).json({ message: "Token Google Invalid" }); }
 });
 
+const nodemailer = require('nodemailer');
+
+// Konfigurasi pengirim email
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: 'teamsigemar@gmail.com', // Sesuai di gambar Bunda/Ayah
+        pass: 'isi_dengan_app_password_google_anda' // Jangan pakai password email biasa
+    }
+});
+
 app.post('/api/forgot-password', async (req, res) => {
     const { email } = req.body;
     try {
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        
-        // 1. Update OTP di Database
-        const result = await sql`UPDATE users SET otp = ${otp} WHERE email = ${email}`;
+        const { rowCount } = await sql`UPDATE users SET otp = ${otp} WHERE email = ${email}`;
 
         if (result.rowCount === 0) {
             return res.status(404).json({ message: "Email tidak terdaftar nggih Bunda/Ayah!" });
         }
 
-        // 2. Kirim Email
+        // Proses pengiriman email asli ke Bunda/Ayah
         const mailOptions = {
             from: '"SiGemar Admin" <teamsigemar@gmail.com>',
             to: email,
-            subject: 'KODE OTP RESET PASSWORD - SIGEMAR',
-            html: `
-                <div style="font-family: sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-                    <h2 style="color: #2563eb;">Halo Bunda/Ayah!</h2>
-                    <p>Kami menerima permintaan reset password. Gunakan kode OTP di bawah ini:</p>
-                    <div style="background: #f3f4f6; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #ea580c;">
-                        ${otp}
-                    </div>
-                    <p style="font-size: 12px; color: #666; mt-4;">*Kode ini berlaku untuk sekali pakai. Jika bukan Bunda/Ayah yang meminta, abaikan saja nggih.</p>
-                </div>
-            `
+            subject: 'KODE OTP RESET PASSWORD',
+            text: `Kode OTP Anda: ${otp}`,
+            html: `<b>Kode OTP Anda: ${otp}</b>`
         };
 
-        try {
-            await transporter.sendMail(mailOptions);
-            res.json({ message: "OTP berhasil dikirim ke email Bunda/Ayah!" });
-        } catch (mailError) {
-            // Jika email gagal tapi DB sukses, kita kasih tahu kodenya di log server
-            console.error("Gagal Kirim Email:", mailError);
-            console.log("--- MODE DARURAT ---");
-            console.log(`OTP untuk ${email} adalah: ${otp}`);
-            console.log("---------------------");
-            
-            // Berikan pesan sukses palsu ke frontend (untuk testing) agar Bunda/Ayah bisa lanjut
-            res.json({ message: "OTP dikirim (Cek log server untuk kodenya nggih!)" });
-        }
-
-    } catch (err) {
-        console.error("Full Error:", err);
-        res.status(500).json({ message: "Terjadi kesalahan sistem, mohon coba lagi." });
+        await transporter.sendMail(mailOptions);
+        
+        res.json({ message: "OTP berhasil dikirim ke email Bunda/Ayah!" });
+    } catch (err) { 
+        console.error(err);
+        res.status(500).json({ message: "Gagal mengirim email, coba lagi nanti nggih." }); 
     }
 });
 
