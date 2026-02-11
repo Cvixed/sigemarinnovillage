@@ -87,7 +87,7 @@ try {
     }
 
 model = genAI.getGenerativeModel({ 
-    model: "gemini-1.5-flash", 
+    model: "gemini-flash-latest", 
     generationConfig: { 
         responseMimeType: "application/json",
         maxOutputTokens: 1000, // Batasi maks token (sekitar 700 kata), agar tidak loading selamanya
@@ -97,7 +97,7 @@ model = genAI.getGenerativeModel({
 
 // Dan untuk Chatbot (modelText):
 modelText = genAI.getGenerativeModel({ 
-    model: "gemini-1.5-flash",
+    model: "gemini-flash-latest",
     generationConfig: { 
         maxOutputTokens: 300 // Chatbot cukup pendek (sekitar 200 kata)
     }
