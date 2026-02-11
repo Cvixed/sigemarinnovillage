@@ -210,38 +210,46 @@ app.get('/api/health', (req, res) => {
 // Di dalam /api/setup-db, update create table users:
 // status VARCHAR(20) DEFAULT 'pending'
 
-// --- UPDATE DI api/index.js ---
+// --- [UPDATE] LOGIN (SUPPORT EMAIL & USERNAME) ---
 app.post('/api/login', async (req, res) => {
     try {
         const { username, password } = req.body;
         
-        // Ambil user dari DB
-        const { rows } = await sql`SELECT * FROM users WHERE username = ${username}`;
+        console.log("Login Attempt:", username, password); // Cek di terminal apa yang dikirim
+
+        // Revisi Query: Cari berdasarkan Username ATAU Email
+        const { rows } = await sql`
+            SELECT * FROM users 
+            WHERE username = ${username} OR email = ${username}
+        `;
+        
         const user = rows[0];
 
-        // 1. Validasi Keberadaan User & Password
-        if (!user || user.password !== password) {
-            return res.status(401).json({ message: "Username atau Password salah!" });
+        // 1. Validasi User Ada
+        if (!user) {
+            return res.status(401).json({ message: "Akun tidak ditemukan (Cek Username/Email)." });
         }
 
-        // 2. LOGIKA PENYARINGAN STATUS (Gembok Utama)
-        // Kita paksa ubah ke lowercase agar tidak ada masalah huruf besar/kecil
-        const currentStatus = (user.status || 'pending').toLowerCase();
+        // 2. Validasi Password
+        // Note: Pastikan 'user.password' dan 'password' (input) sama persis
+        if (String(user.password).trim() !== String(password).trim()) {
+            return res.status(401).json({ message: "Password salah!" });
+        }
 
+        // 3. Cek Status Akun
+        const currentStatus = (user.status || 'pending').toLowerCase();
         if (currentStatus !== 'active') {
-            // Jika status bukan 'active', kita berikan status 403 (Forbidden)
-            // Dan kita PAKSA return agar kode di bawahnya tidak jalan
-            console.log(`Blokir login: User ${username} statusnya masih ${currentStatus}`);
             return res.status(403).json({ 
-                message: `Akun Anda (${username}) berstatus ${currentStatus.toUpperCase()}. Mohon hubungi Super Admin untuk aktivasi.` 
+                message: `Akun status ${currentStatus}. Hubungi Admin.` 
             });
         }
 
-        // 3. Hanya jika statusnya 'active' barulah kode ini bisa diakses
+        // 4. Login Sukses
         res.json({ 
             message: "Login Berhasil", 
             user: { 
                 username: user.username, 
+                email: user.email,
                 role: user.role, 
                 fullName: user.full_name,
                 nik: user.nik 
