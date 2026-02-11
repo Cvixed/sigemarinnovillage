@@ -501,7 +501,7 @@ app.post('/api/consult-ai', async (req, res) => {
 
            FORMAT OUTPUT WAJIB JSON (Tanpa markdown lain):
            {
-               "analisis": "Narasi medis lengkap minimal 2 paragraf tentang kondisi anak, penyebab kemungkinan, dan urgensi penanganan...",
+               "analisis": "Narasi medis maksimal 1 paragraf tentang kondisi anak, penyebab kemungkinan, dan urgensi penanganan...",
                "faktor_risiko": ["Sebutkan risiko 1", "Sebutkan risiko 2", "Sebutkan risiko 3 (min 3)"],
                "preventif": [ 
                     {"teks": "Saran pencegahan detail 1...", "kategori": "nutrisi"},
