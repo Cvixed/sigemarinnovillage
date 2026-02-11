@@ -9,6 +9,7 @@ import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google';
 import 'leaflet/dist/leaflet.css';
 import { MapContainer, TileLayer, Marker, Popup, Tooltip as LeafletTooltip } from 'react-leaflet';
 import L from 'leaflet';
+import './App.css';
 
 // Jika Development (Local), tembak ke port 3000. Jika Production (Vercel), pakai '/api' relative.
 const API_URL = import.meta.env.DEV ? 'http://localhost:3000/api' : '/api';
