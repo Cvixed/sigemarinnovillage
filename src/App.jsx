@@ -2927,19 +2927,32 @@ const AuthPage = ({ onLoginSuccess, notify, onBackToHome }) => {
                         )}
 
                         {/* STEP 3: NEW PASSWORD */}
-                        {forgotStep === 3 && (
-                            <form onSubmit={handleResetPassword}>
-                                <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 mb-6">
-                                    <p className="text-xs text-purple-800 leading-relaxed">
-                                        OTP Terverifikasi! Silakan buat password baru Anda.
-                                    </p>
-                                </div>
-                                <OrangeInput label="Password Baru" name="newPassword" placeholder="Password minimal 6 karakter" value={form.newPassword} onChange={handleChange} isPass />
-                                <button disabled={loading} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-xl shadow-lg transition active:scale-95 mb-6 flex justify-center items-center gap-2">
-                                    {loading ? <RefreshCw className="animate-spin" size={20}/> : 'Simpan Password Baru'}
-                                </button>
-                            </form>
-                        )}
+{forgotStep === 3 && (
+    <form onSubmit={handleResetPassword}>
+        <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 mb-6">
+            <p className="text-xs text-purple-800 leading-relaxed">
+                OTP Terverifikasi! Silakan buat password baru Anda.
+            </p>
+        </div>
+        
+        {/* PASTIKAN name="newPassword" SAMA DENGAN DI STATE */}
+        <OrangeInput 
+            label="Password Baru" 
+            name="newPassword" 
+            placeholder="Password minimal 6 karakter" 
+            value={form.newPassword} 
+            onChange={handleChange} 
+            isPass={true} // Pastikan mode password aktif
+        />
+
+        <button 
+            disabled={loading} 
+            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-4 rounded-xl shadow-lg transition active:scale-95 mb-6 flex justify-center items-center gap-2"
+        >
+            {loading ? <RefreshCw className="animate-spin" size={20}/> : 'Simpan Password Baru'}
+        </button>
+    </form>
+)}
 
                         <div className="text-center">
                             <button type="button" onClick={() => setMode('login')} className="text-sm font-bold text-gray-400 hover:text-orange-500 transition">

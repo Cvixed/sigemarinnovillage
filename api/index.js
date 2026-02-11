@@ -653,21 +653,37 @@ app.post('/api/verify-otp', async (req, res) => {
     }
 });
 
-// --- [TAMBAHAN] RESET PASSWORD BARU ---
+// --- [REVISI] RESET PASSWORD BARU ---
 app.post('/api/reset-password', async (req, res) => {
     try {
-        const { email, newPassword, otp } = req.body; // OTP dikirim lagi untuk double security (opsional)
-        
-        // Update password dan hapus OTP agar tidak bisa dipakai lagi
-        await sql`
+        const { email, newPassword } = req.body;
+
+        console.log("Reset Request -> Email:", email, "Pass Baru:", newPassword); // Cek di terminal Vercel/Local
+
+        // 1. Validasi Input
+        if (!email || !newPassword) {
+            return res.status(400).json({ message: "Password baru tidak boleh kosong!" });
+        }
+
+        // 2. Jalankan Update & Cek Hasilnya
+        // Kita gunakan LOWER(email) agar tidak masalah huruf besar/kecil
+        const result = await sql`
             UPDATE users 
             SET password = ${newPassword}, otp = NULL, otp_expires = NULL 
-            WHERE email = ${email}
+            WHERE LOWER(email) = LOWER(${email})
         `;
 
-        res.json({ message: "Password berhasil diubah! Silakan login." });
+        // 3. Validasi apakah ada data yang berubah
+        if (result.rowCount === 0) {
+            // Jika 0, berarti email tidak ditemukan di database
+            return res.status(404).json({ message: "Email tidak ditemukan atau salah ketik." });
+        }
+
+        res.json({ message: "Password berhasil diubah! Silakan login dengan password baru." });
+
     } catch (err) {
-        res.status(500).json({ message: "Gagal reset password" });
+        console.error("Reset Error:", err);
+        res.status(500).json({ message: "Gagal menyimpan password baru ke database." });
     }
 });
 
