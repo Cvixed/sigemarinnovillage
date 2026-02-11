@@ -1244,19 +1244,37 @@ const ParentDashboard = ({ logs, currentUser, activePage }) => {
         finally { setChatLoading(false); }
     };
 
-    // --- HELPER RENDER LIST (TETAP SAMA - ANTI WHITE SCREEN) ---
+    const getCategoryIcon = (category) => {
+        const cat = (category || '').toLowerCase();
+        if (cat.includes('nutrisi') || cat.includes('makan') || cat.includes('gizi')) return <Utensils size={20} className="text-emerald-500"/>;
+        if (cat.includes('stimulasi') || cat.includes('main') || cat.includes('asah')) return <Baby size={20} className="text-blue-500"/>;
+        if (cat.includes('medis') || cat.includes('dokter') || cat.includes('obat')) return <Stethoscope size={20} className="text-red-500"/>;
+        if (cat.includes('tidur') || cat.includes('istirahat')) return <Clock size={20} className="text-purple-500"/>;
+        if (cat.includes('sanitasi') || cat.includes('bersih')) return <ShieldCheck size={20} className="text-cyan-500"/>;
+        return <Sparkles size={20} className="text-orange-500"/>; 
+    };
+
+    // 2. UPDATE FUNGSI RENDER LIST INI
     const renderMedicalList = (items, colorClass) => {
         if (!items) return <li className="text-gray-400 italic">Tidak ada data</li>;
         if (typeof items === 'string') return <li>{items}</li>;
+        
         if (Array.isArray(items)) {
             return items.map((item, i) => {
                 const isObj = typeof item === 'object' && item !== null;
                 const text = isObj ? item.teks : item;
-                const img = isObj ? item.image : null; 
+                
+                // KITA AMBIL KATEGORINYA, BUKAN GAMBARNYA
+                const category = isObj ? item.kategori : ''; 
+                
                 return (
-                    <li key={i} className="leading-snug flex gap-3 items-start p-2 rounded-lg bg-white/50 border border-transparent hover:border-gray-200 transition">
-                        {img && <img src={img} alt="icon" className="w-6 h-6 object-contain opacity-80"/>}
-                        <span className={colorClass}>{text}</span>
+                    <li key={i} className="leading-snug flex gap-3 items-start p-3 rounded-xl bg-white border border-gray-100 shadow-sm hover:shadow-md transition-all">
+                        {/* Render Icon Lucide (Vektor) */}
+                        <div className="shrink-0 mt-0.5 bg-gray-50 p-1.5 rounded-full">
+                            {getCategoryIcon(category)}
+                        </div>
+                        
+                        <span className={`text-sm ${colorClass}`}>{text}</span>
                     </li>
                 );
             });
