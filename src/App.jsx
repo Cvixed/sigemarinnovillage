@@ -1488,7 +1488,7 @@ const ParentDashboard = ({ logs, currentUser, activePage }) => {
                     )}
                     {chatHistory.map((msg, i) => (
                         <div key={i} className={`flex ${msg.sender==='user'?'justify-end':'justify-start'}`}>
-                            <div className={`max-w-[80%] p-4 rounded-2xl text-sm leading-relaxed shadow-sm ${msg.sender==='user'?'bg-orange-500 text-white rounded-tr-none':'bg-white text-gray-800 rounded-tl-none border border-gray-200'}`}>
+                            <div className={`max-w-[85%] md:max-w-md lg:max-w-lg p-4 rounded-2xl text-sm leading-relaxed shadow-sm ${msg.sender==='user'?'bg-orange-500 text-white rounded-tr-none':'bg-white text-gray-800 rounded-tl-none border border-gray-200'}`}>
                                 {msg.text}
                             </div>
                         </div>
