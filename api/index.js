@@ -85,6 +85,24 @@ try {
         model = genAI.getGenerativeModel({ model: "gemini-flash-latest", generationConfig: { responseMimeType: "application/json" }});
         modelText = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
     }
+
+model = genAI.getGenerativeModel({ 
+    model: "gemini-1.5-flash", 
+    generationConfig: { 
+        responseMimeType: "application/json",
+        maxOutputTokens: 1000, // Batasi maks token (sekitar 700 kata), agar tidak loading selamanya
+        temperature: 0.7 
+    }
+});
+
+// Dan untuk Chatbot (modelText):
+modelText = genAI.getGenerativeModel({ 
+    model: "gemini-1.5-flash",
+    generationConfig: { 
+        maxOutputTokens: 300 // Chatbot cukup pendek (sekitar 200 kata)
+    }
+});
+
 } catch (e) { console.log("AI Config Error:", e.message); }
 
 const mailTransporter = nodemailer.createTransport({
