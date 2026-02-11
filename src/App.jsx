@@ -367,7 +367,7 @@ const Sidebar = ({ userRole, activePage, setActivePage, onLogout, setRegisterMod
                 </div>
 
                 {/* Navigasi Menu */}
-                <nav className="flex-1 py-6 px-3 overflow-y-auto custom-scrollbar overflow-x-hidden">
+                <nav className="flex-1 py-6 px-3 overflow-y-auto scrollbar-hide overflow-x-hidden">
                     {menuGroups.map((group, groupIndex) => { 
                         const visibleItems = group.items.filter(item => item.roles.includes(userRole)); 
                         if (visibleItems.length === 0) return null; 

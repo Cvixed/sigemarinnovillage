@@ -2,12 +2,3 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Kelas untuk menyembunyikan scrollbar tapi tetap bisa discroll */
-.scrollbar-hide {
-    -ms-overflow-style: none;  /* IE dan Edge */
-    scrollbar-width: none;  /* Firefox */
-}
-
-.scrollbar-hide::-webkit-scrollbar {
-    display: none; /* Chrome, Safari, dan Opera */
-}
