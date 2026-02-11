@@ -2713,27 +2713,62 @@ const AuthPage = ({ onLoginSuccess, notify, onBackToHome }) => {
         }
     };
 
-    // --- STEP 1: KIRIM OTP ---
-    const handleSendOtp = async (e) => {
-        e.preventDefault();
+    // --- STEP 1: LOGIC CEK & KIRIM OTP (UPDATE) ---
+    const handleCheckAndSendOtp = async (e, manualEmailInput = null) => {
+        if (e) e.preventDefault();
+        
+        // Ambil apa yang diketik di kolom LOGIN (Username)
+        const loginInput = form.username; 
+
+        // 1. Validasi Input Login Kosong
+        if (!loginInput) {
+            notify("Harap isi Username di kolom login terlebih dahulu!", "error");
+            return;
+        }
+
+        // 2. Cek apakah itu Email atau Username?
+        // Helper sederhana: jika ada '@' anggap email
+        const isEmail = /\S+@\S+\.\S+/.test(loginInput);
+
+        // JIKA USERNAME (Bukan Email) DAN Belum Input Email Konfirmasi
+        if (!isEmail && !manualEmailInput) {
+            // Buka Popup Step 1 untuk minta user ketik emailnya
+            setMode('forgot');
+            setForgotStep(1);
+            return; 
+        }
+
+        // 3. Persiapan Data Kirim ke Backend
         setLoading(true);
+        
+        const payload = {
+            identifier: loginInput, // Username dari kolom login
+            confirmEmail: manualEmailInput // Email yang baru saja diketik di popup
+        };
+
         try {
             const res = await fetch(`${API_URL}/forgot-password`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: form.email })
+                body: JSON.stringify(payload) // Kirim dua-duanya
             });
             const data = await res.json();
 
             if (res.ok) {
-                notify("Kode OTP terkirim ke email!", "success");
-                // [FIX] JANGAN setMode('login'), tapi lanjut ke STEP 2
+                notify(`Cocok! OTP terkirim ke: ${data.email}`, "success");
+                
+                // Simpan email yang valid ke state
+                setForm(prev => ({ ...prev, email: data.email })); 
+                
+                // Pindah ke Step Input OTP
+                setMode('forgot'); 
                 setForgotStep(2); 
             } else {
-                notify(data.message || "Email tidak ditemukan", "error");
+                // Disini akan muncul notif: "Email akun salah!" jika tidak cocok
+                notify(data.message, "error");
             }
         } catch (err) {
-            notify("Error mengirim email", "error");
+            notify("Gagal menghubungi server", "error");
         } finally {
             setLoading(false);
         }
@@ -2897,20 +2932,40 @@ const AuthPage = ({ onLoginSuccess, notify, onBackToHome }) => {
                 {mode === 'forgot' && (
                     <div className="animate-in fade-in">
                         {/* STEP 1: INPUT EMAIL */}
-                        {forgotStep === 1 && (
-                            <form onSubmit={handleSendOtp}>
-                                <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-6">
-                                    <p className="text-xs text-blue-800 leading-relaxed">
-                                        Masukkan alamat email yang terdaftar. Kami akan mengirimkan kode OTP.
-                                    </p>
-                                </div>
-                                <OrangeInput label="Email Terdaftar" name="email" type="email" placeholder="email@contoh.com" value={form.email} onChange={handleChange} />
-                                <button disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg transition active:scale-95 mb-6 flex justify-center items-center gap-2">
-                                    {loading ? <RefreshCw className="animate-spin" size={20}/> : 'Kirim Kode OTP'}
-                                </button>
-                            </form>
-                        )}
-
+                        {/* STEP 1: KONFIRMASI EMAIL (Hanya muncul jika login pakai Username) */}
+{forgotStep === 1 && (
+    <form onSubmit={(e) => handleCheckAndSendOtp(e, form.email)}>
+        <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 mb-6">
+            <p className="text-xs text-orange-900 leading-relaxed font-bold">
+                Verifikasi Keamanan
+            </p>
+            <p className="text-xs text-orange-800 mt-1">
+                Anda ingin mereset password untuk Username: <b>"{form.username}"</b>. 
+                <br/>Demi keamanan, silakan ketik <b>Email</b> yang terdaftar pada akun tersebut.
+            </p>
+        </div>
+        
+        {/* Input ini akan dikirim sebagai 'confirmEmail' ke backend */}
+        <OrangeInput 
+            label="Email Akun Ini" 
+            name="email" 
+            type="email" 
+            placeholder="Masukkan email yang sesuai..." 
+            value={form.email} 
+            onChange={handleChange} 
+        />
+        
+        <button disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg transition active:scale-95 mb-6 flex justify-center items-center gap-2">
+            {loading ? <RefreshCw className="animate-spin" size={20}/> : 'Verifikasi & Kirim OTP'}
+        </button>
+        
+        <div className="text-center">
+             <button type="button" onClick={() => setMode('login')} className="text-sm font-bold text-gray-400 hover:text-orange-500 transition">
+                Batal
+            </button>
+        </div>
+    </form>
+)}
                         {/* STEP 2: INPUT OTP */}
                         {forgotStep === 2 && (
                             <form onSubmit={handleVerifyOtp}>

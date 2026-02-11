@@ -332,29 +332,67 @@ app.post('/api/auth/google', async (req, res) => {
     } catch (error) { res.status(401).json({ message: "Token Google Invalid" }); }
 });
 
-// --- FORGOT PASSWORD ---
+// --- [UPDATE KEAMANAN] FORGOT PASSWORD DENGAN VALIDASI KETAT ---
 app.post('/api/forgot-password', async (req, res) => {
     try {
-        const { email } = req.body;
-        const { rows } = await sql`SELECT * FROM users WHERE email = ${email}`;
+        const { identifier, confirmEmail } = req.body; 
+        // identifier = Input dari kolom Login (Username)
+        // confirmEmail = Input dari Popup (Email yang harus dicocokkan)
+
+        // 1. Cari User berdasarkan Username (atau Email jika user input email di login)
+        const { rows } = await sql`
+            SELECT * FROM users 
+            WHERE username = ${identifier} OR LOWER(email) = LOWER(${identifier})
+        `;
         
-        if (rows.length === 0) return res.status(404).json({ message: "Email tidak terdaftar" });
+        if (rows.length === 0) {
+            return res.status(404).json({ message: "Akun tidak ditemukan." });
+        }
+        
         const user = rows[0];
 
+        // 2. VALIDASI KETAT: Jika ada input konfirmasi email, WAJIB cocok
+        if (confirmEmail) {
+            // Bandingkan email di database dengan yang diinput user (case-insensitive)
+            if (user.email.toLowerCase().trim() !== confirmEmail.toLowerCase().trim()) {
+                // INI YANG ANDA MINTA:
+                // Jika email yang diketik BUKAN milik username tersebut -> ERROR
+                return res.status(400).json({ 
+                    message: "Email akun salah! Email tidak cocok dengan Username tersebut." 
+                });
+            }
+        }
+
+        // 3. Jika Lolos Validasi -> Generate OTP
         const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-        const otpExpires = Date.now() + 300000; 
+        const otpExpires = Date.now() + 300000; // 5 menit
 
         await sql`UPDATE users SET otp = ${otpCode}, otp_expires = ${otpExpires} WHERE id = ${user.id}`;
 
+        // 4. Kirim Email
         const mailOptions = {
             from: `"SiGemar Admin" <${EMAIL_USER}>`,
-            to: email,
+            to: user.email,
             subject: 'KODE OTP RESET PASSWORD',
-            html: `<h3>Kode OTP Anda: ${otpCode}</h3>`
+            html: `
+                <h3>Halo, ${user.full_name || user.username}</h3>
+                <p>Permintaan reset password diterima.</p>
+                <h1 style="color:orange; letter-spacing: 5px;">${otpCode}</h1>
+                <p>Kode ini berlaku 5 menit.</p>
+            `
         };
         await mailTransporter.sendMail(mailOptions);
-        res.json({ message: "OTP Terkirim ke Email" });
-    } catch (err) { res.status(500).json({ message: "Gagal kirim email" }); }
+
+        // Sukses
+        res.json({ 
+            message: "Verifikasi Berhasil! OTP Terkirim.", 
+            email: user.email 
+        });
+
+    } catch (err) { 
+        console.error(err);
+        res.status(500).json({ message: "Gagal memproses permintaan." }); 
+    }
 });
 
 // --- IOT DATA (GET) ---
