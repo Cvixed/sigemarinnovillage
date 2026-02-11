@@ -31,16 +31,46 @@ const LeafletComponents = React.lazy(() => import('react-leaflet').then(module =
     TileLayer: module.TileLayer, Marker: module.Marker, Popup: module.Popup, Tooltip: module.Tooltip 
 })));
 
-// --- KONFIGURASI ICON MARKER ---
+// --- KONFIGURASI ICON MARKER (UPDATED) ---
+
+// 1. MERAH (Stunting, Gizi Kurang, Risiko)
 const iconStunting = new L.DivIcon({
     className: 'bg-transparent border-none',
-    html: `<div class="relative flex items-center justify-center w-10 h-10"><span class="absolute w-full h-full bg-red-500 rounded-full opacity-30 animate-ping"></span><span class="relative w-4 h-4 bg-red-600 rounded-full border-2 border-white shadow-lg"></span></div>`,
-    iconSize: [40, 40], iconAnchor: [20, 35], popupAnchor: [0, -35]
+    html: `<div class="relative flex items-center justify-center w-10 h-10">
+             <span class="absolute w-full h-full bg-red-500 rounded-full opacity-30 animate-ping"></span>
+             <span class="relative w-4 h-4 bg-red-600 rounded-full border-2 border-white shadow-lg"></span>
+           </div>`,
+    iconSize: [40, 40], iconAnchor: [20, 20], popupAnchor: [0, -20]
 });
+
+// 2. UNGU (Overweight - Style seperti stunting tapi ungu)
+const iconOverweight = new L.DivIcon({
+    className: 'bg-transparent border-none',
+    html: `<div class="relative flex items-center justify-center w-10 h-10">
+             <span class="absolute w-full h-full bg-purple-500 rounded-full opacity-30 animate-ping"></span>
+             <span class="relative w-4 h-4 bg-purple-600 rounded-full border-2 border-white shadow-lg"></span>
+           </div>`,
+    iconSize: [40, 40], iconAnchor: [20, 20], popupAnchor: [0, -20]
+});
+
+// 3. HIJAU (Normal - Tenang)
 const iconNormal = new L.DivIcon({
     className: 'bg-transparent border-none',
-    html: `<div class="relative flex items-center justify-center w-8 h-8"><span class="absolute w-full h-full bg-blue-400 rounded-full opacity-20 animate-pulse"></span><span class="relative w-3 h-3 bg-blue-500 rounded-full border-2 border-white shadow-md"></span></div>`,
-    iconSize: [32, 32], iconAnchor: [16, 28], popupAnchor: [0, -28]
+    html: `<div class="relative flex items-center justify-center w-8 h-8">
+             <span class="absolute w-full h-full bg-emerald-400 rounded-full opacity-20"></span>
+             <span class="relative w-3 h-3 bg-emerald-500 rounded-full border-2 border-white shadow-md"></span>
+           </div>`,
+    iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -16]
+});
+
+// 4. BIRU (Abnormal Lain: Tinggi Lebih, Macrocephaly)
+const iconAbnormal = new L.DivIcon({
+    className: 'bg-transparent border-none',
+    html: `<div class="relative flex items-center justify-center w-8 h-8">
+             <span class="absolute w-full h-full bg-blue-400 rounded-full opacity-30 animate-pulse"></span>
+             <span class="relative w-3 h-3 bg-blue-600 rounded-full border-2 border-white shadow-md"></span>
+           </div>`,
+    iconSize: [32, 32], iconAnchor: [16, 16], popupAnchor: [0, -16]
 });
 
 // --- HELPER UI ---
@@ -1856,52 +1886,85 @@ const SuperAdminRegistration = ({ onBack, notify, onRefresh }) => {
     );
 };
 
-// --- KOMPONEN GEOSPASIAL MAP (UPDATED: REAL COORDINATES) ---
+// --- KOMPONEN GEOSPASIAL MAP (UPDATED: COLOR CODED) ---
 const StuntingMap = ({ data }) => {
-    // Pusat Peta: Kantor Kelurahan Gedongsari (Estimasi)
-    const centerPosition = [-7.2347, 110.1200]; 
+    // Pusat Peta: Desa Jumo
+    const JUMO_CENTER = [-7.2347, 110.1200]; 
+
+    // Daftar Koordinat Tetap per Dusun
+    const DUSUN_COORDINATES = {
+        "Dusun Balekerso":  { lat: -7.2335, lng: 110.1180 },
+        "Dusun Pistan":     { lat: -7.2350, lng: 110.1225 },
+        "Dusun Janggar":    { lat: -7.2365, lng: 110.1190 },
+        "Dusun Gedongan":   { lat: -7.2340, lng: 110.1205 },
+        "Dusun Spatran":    { lat: -7.2325, lng: 110.1215 },
+        "Dusun Pringkudo":  { lat: -7.2355, lng: 110.1175 },
+        "Dusun Gandok":     { lat: -7.2370, lng: 110.1210 },
+        "DEFAULT":          { lat: -7.2347, lng: 110.1200 } 
+    };
 
     return (
-        <MapContainer center={centerPosition} zoom={15} style={{ height: "450px", width: "100%", borderRadius: "16px", zIndex: 0 }}>
+        <MapContainer center={JUMO_CENTER} zoom={15} style={{ height: "450px", width: "100%", borderRadius: "16px", zIndex: 0 }}>
             <TileLayer
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            {data.map((pasien) => {
-                // 1. Tentukan Icon berdasarkan status
-                const isRisk = pasien.status && (pasien.status.includes('Stunting') || pasien.status.includes('Gizi Kurang') || pasien.status.includes('Microcephaly'));
-                const theIcon = isRisk ? iconStunting : iconNormal;
-                
-                // 2. LOGIKA UTAMA: Gunakan koordinat dari database jika ada
-                // Jika tidak ada (data lama), fallback ke posisi tengah
-                const hasCoord = pasien.latitude && pasien.longitude;
-                const pos = hasCoord ? [pasien.latitude, pasien.longitude] : centerPosition;
+            {data.map((pasien, index) => {
+                const s = (pasien.status || '').toUpperCase();
+                let theIcon = iconNormal; // Default Hijau
 
-                if (!hasCoord) return null; // Opsional: Jangan tampilkan jika tidak ada koordinat
+                // --- LOGIKA PEMILIHAN WARNA ICON ---
+                if (s.includes('STUNTING') || s.includes('KURANG') || s.includes('BURUK') || s.includes('MICRO') || s.includes('KECIL')) {
+                    // Kategori Risiko Tinggi -> MERAH
+                    theIcon = iconStunting;
+                } else if (s.includes('OVERWEIGHT') || s.includes('LEBIH')) {
+                    // Kategori Overweight (jika bukan Tinggi Lebih) -> UNGU
+                    // Cek khusus agar Tinggi Lebih tidak masuk sini jika mengandung kata 'Lebih'
+                    if (!s.includes('TINGGI')) {
+                        theIcon = iconOverweight;
+                    } else {
+                        theIcon = iconAbnormal; // Tinggi Lebih masuk Biru
+                    }
+                } else if (s.includes('TINGGI') || s.includes('MACRO') || s.includes('BESAR') || s.includes('ABNORMAL')) {
+                    // Kategori Abnormal Lainnya -> BIRU
+                    theIcon = iconAbnormal;
+                } else {
+                    // Normal -> HIJAU
+                    theIcon = iconNormal;
+                }
+                
+                // Logika Penempatan (Offset agar tidak tumpuk)
+                const dusunName = pasien.dusun || "DEFAULT";
+                const basePoint = DUSUN_COORDINATES[dusunName] || DUSUN_COORDINATES["DEFAULT"];
+                const radius = 0.00025; 
+                const angle = (index % 8) * (Math.PI / 4); 
+                const layer = Math.floor(index / 8) + 1;
+                
+                const finalLat = basePoint.lat + (Math.sin(angle) * radius * layer);
+                const finalLng = basePoint.lng + (Math.cos(angle) * radius * layer);
 
                 return (
-                    <Marker key={pasien.id} position={pos} icon={theIcon}>
+                    <Marker key={pasien.id || index} position={[finalLat, finalLng]} icon={theIcon}>
                         <Popup>
                             <div className="text-center min-w-[150px]">
                                 <h3 className="font-bold text-blue-900 text-sm mb-1">{pasien.nama || pasien.namaAnak}</h3>
                                 <p className="text-xs text-gray-500 mb-2">{pasien.umur} Bulan</p>
                                 
-                                {/* Tampilkan Nama Dusun */}
                                 <div className="bg-gray-100 rounded px-2 py-1 mb-2 text-[10px] font-bold text-gray-600 flex items-center justify-center gap-1">
                                     <MapPin size={10}/> {pasien.dusun || pasien.kelurahan}
                                 </div>
 
-                                <span className={`px-2 py-1 rounded-full text-[10px] text-white font-bold ${isRisk ? 'bg-red-500' : 'bg-blue-500'}`}>
-                                    {pasien.status}
-                                </span>
+                                {/* Badge Status di Popup menyesuaikan warna */}
+                                <StatusBadge status={pasien.status} />
+
                                 <div className="mt-3 pt-2 border-t border-gray-100 text-xs text-left grid grid-cols-2 gap-1 font-medium text-gray-700">
-                                    <span>Berat Badan: {pasien.berat}kg</span>
-                                    <span>Tinggi Badan: {pasien.tinggi}cm</span>
+                                    <span>BB: {pasien.berat}kg</span>
+                                    <span>TB: {pasien.tinggi}cm</span>
                                 </div>
                             </div>
                         </Popup>
                         <LeafletTooltip direction="top" offset={[0, -20]} opacity={1}>
-                            {pasien.nama || pasien.namaAnak}
+                            {pasien.nama}
                         </LeafletTooltip>
                     </Marker>
                 );
