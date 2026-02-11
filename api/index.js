@@ -80,38 +80,11 @@ app.get('/api/setup-db', async (req, res) => {
 // AI Setup (Safe Init)
 let model, modelText;
 try {
-    // Cari bagian ini di api/index.js
-if(GEN_AI_KEY) {
-    const genAI = new GoogleGenerativeAI(GEN_AI_KEY);
-    
-    //gemini-flash-latest
-    model = genAI.getGenerativeModel({ 
-        model: "gemini-flash-latest;", // <--- INI KUNCINYA
-        generationConfig: { responseMimeType: "application/json" }
-    });
-    
-    modelText = genAI.getGenerativeModel({ 
-        model: "gemini-flash-latest" // <--- INI JUGA
-    });
-}
-
-model = genAI.getGenerativeModel({ 
-    model: "gemini-flash-latest", 
-    generationConfig: { 
-        responseMimeType: "application/json",
-        maxOutputTokens: 1000, // Batasi maks token (sekitar 700 kata), agar tidak loading selamanya
-        temperature: 0.7 
+    if(GEN_AI_KEY) {
+        const genAI = new GoogleGenerativeAI(GEN_AI_KEY);
+        model = genAI.getGenerativeModel({ model: "gemini-flash-latest", generationConfig: { responseMimeType: "application/json" }});
+        modelText = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
     }
-});
-
-// Dan untuk Chatbot (modelText):
-modelText = genAI.getGenerativeModel({ 
-    model: "gemini-flash-latest",
-    generationConfig: { 
-        maxOutputTokens: 300 // Chatbot cukup pendek (sekitar 200 kata)
-    }
-});
-
 } catch (e) { console.log("AI Config Error:", e.message); }
 
 const mailTransporter = nodemailer.createTransport({
