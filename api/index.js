@@ -86,17 +86,17 @@ if(GEN_AI_KEY) {
     
     // GANTI 'gemini-flash-latest' MENJADI 'gemini-1.5-flash'
     model = genAI.getGenerativeModel({ 
-        model: "gemini-1.5-flash", // <--- INI KUNCINYA
+        model: "gemini-latest-flash", // <--- INI KUNCINYA
         generationConfig: { responseMimeType: "application/json" }
     });
     
     modelText = genAI.getGenerativeModel({ 
-        model: "gemini-1.5-flash" // <--- INI JUGA
+        model: "gemini-latest-flash" // <--- INI JUGA
     });
 }
 
 model = genAI.getGenerativeModel({ 
-    model: "gemini-1.5-flash", 
+    model: "gemini-latest-flash", 
     generationConfig: { 
         responseMimeType: "application/json",
         maxOutputTokens: 1000, // Batasi maks token (sekitar 700 kata), agar tidak loading selamanya
@@ -106,7 +106,7 @@ model = genAI.getGenerativeModel({
 
 // Dan untuk Chatbot (modelText):
 modelText = genAI.getGenerativeModel({ 
-    model: "gemini-1.5-flash",
+    model: "gemini-latest-flash",
     generationConfig: { 
         maxOutputTokens: 300 // Chatbot cukup pendek (sekitar 200 kata)
     }
