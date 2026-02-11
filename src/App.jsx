@@ -1107,7 +1107,7 @@ const AIStuntingCompanion = ({ childData, notify, onRefresh }) => {
                             {/* C. TIMELINE 12 BULAN (NEW FEATURE) */}
                             <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm">
                                 <h4 className="font-black text-blue-900 text-sm uppercase mb-6 flex items-center gap-2">
-                                    <Clock size={18} className="text-purple-500"/> Roadmap 12 Bulan ke Depan
+                                    <Clock size={18} className="text-purple-500"/> Timeline Pemulihan
                                 </h4>
                                 
                                 <div className="relative border-l-2 border-purple-100 ml-3 space-y-8 pb-2">
