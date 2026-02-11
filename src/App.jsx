@@ -648,7 +648,6 @@ const LandingPage = ({ onNavigateToLogin }) => {
         
         {/* KIRI: Logo Aplikasi (SiGemar) */}
         <div className="flex items-center gap-3 z-20 relative shrink-0">
-            <img src="/SiGemar.png" className="h-12 w-auto object-contain" alt="Logo"/>
             <span className={`text-2xl font-black tracking-tight ${isScrolled ? 'text-blue-900' : 'text-blue-900'} transition-colors`}>
                 <span className="text-orange-500">Si</span>Gemar
             </span>
