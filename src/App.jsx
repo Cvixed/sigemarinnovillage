@@ -1886,62 +1886,59 @@ const SuperAdminRegistration = ({ onBack, notify, onRefresh }) => {
     );
 };
 
-// --- KOMPONEN GEOSPASIAL MAP (UPDATED: COLOR CODED) ---
+// --- KOMPONEN GEOSPASIAL MAP (UPDATED: SEBARAN DI AREA GEDONGSARI) ---
 const StuntingMap = ({ data }) => {
-    // Pusat Peta: Desa Jumo
-    const JUMO_CENTER = [-7.2347, 110.1200]; 
-
-    // Daftar Koordinat Tetap per Dusun
-    const DUSUN_COORDINATES = {
-        "Dusun Balekerso":  { lat: -7.2335, lng: 110.1180 },
-        "Dusun Pistan":     { lat: -7.2350, lng: 110.1225 },
-        "Dusun Janggar":    { lat: -7.2365, lng: 110.1190 },
-        "Dusun Gedongan":   { lat: -7.2340, lng: 110.1205 },
-        "Dusun Spatran":    { lat: -7.2325, lng: 110.1215 },
-        "Dusun Pringkudo":  { lat: -7.2355, lng: 110.1175 },
-        "Dusun Gandok":     { lat: -7.2370, lng: 110.1210 },
-        "DEFAULT":          { lat: -7.2347, lng: 110.1200 } 
-    };
+    // 1. Koordinat Pusat Desa Gedongsari (Titik Tengah)
+    const GEDONGSARI_CENTER = [-7.2340, 110.1205]; 
 
     return (
-        <MapContainer center={JUMO_CENTER} zoom={15} style={{ height: "450px", width: "100%", borderRadius: "16px", zIndex: 0 }}>
+        // Zoom level 15 atau 16 pas untuk satu desa
+        <MapContainer center={GEDONGSARI_CENTER} zoom={15} style={{ height: "450px", width: "100%", borderRadius: "16px", zIndex: 0 }}>
             <TileLayer
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
             {data.map((pasien, index) => {
-                const s = (pasien.status || '').toUpperCase();
-                let theIcon = iconNormal; // Default Hijau
+    const s = (pasien.status || '').toUpperCase();
+    let theIcon = iconNormal; // Default Hijau
 
-                // --- LOGIKA PEMILIHAN WARNA ICON ---
-                if (s.includes('STUNTING') || s.includes('KURANG') || s.includes('BURUK') || s.includes('MICRO') || s.includes('KECIL')) {
-                    // Kategori Risiko Tinggi -> MERAH
-                    theIcon = iconStunting;
-                } else if (s.includes('OVERWEIGHT') || s.includes('LEBIH')) {
-                    // Kategori Overweight (jika bukan Tinggi Lebih) -> UNGU
-                    // Cek khusus agar Tinggi Lebih tidak masuk sini jika mengandung kata 'Lebih'
-                    if (!s.includes('TINGGI')) {
-                        theIcon = iconOverweight;
-                    } else {
-                        theIcon = iconAbnormal; // Tinggi Lebih masuk Biru
-                    }
-                } else if (s.includes('TINGGI') || s.includes('MACRO') || s.includes('BESAR') || s.includes('ABNORMAL')) {
-                    // Kategori Abnormal Lainnya -> BIRU
-                    theIcon = iconAbnormal;
-                } else {
-                    // Normal -> HIJAU
-                    theIcon = iconNormal;
-                }
+    // --- LOGIKA PEMILIHAN WARNA ICON (DIPERBAIKI) ---
+    
+    // PRIORITAS 1: MERAH (Kondisi Kritis/Kurang)
+    if (s.includes('STUNTING') || s.includes('KURANG') || s.includes('BURUK') || s.includes('MICRO') || s.includes('KECIL')) {
+        theIcon = iconStunting;
+    } 
+    // PRIORITAS 2: UNGU (Overweight/Lebih Berat)
+    // Cek Overweight DULUAN sebelum cek Tinggi Lebih.
+    // Jika pasien punya "Overweight" DAN "Tinggi Lebih", dia akan masuk sini (Ungu).
+    else if (s.includes('OVERWEIGHT') || (s.includes('LEBIH') && !s.includes('TINGGI'))) {
+        theIcon = iconOverweight;
+    } 
+    // PRIORITAS 3: BIRU (Abnormal Lain: Tinggi Lebih, Macrocephaly)
+    // Hanya masuk sini jika TIDAK Stunting dan TIDAK Overweight
+    else if (s.includes('TINGGI') || s.includes('MACRO') || s.includes('BESAR') || s.includes('ABNORMAL')) {
+        theIcon = iconAbnormal;
+    } 
+    // PRIORITAS 4: HIJAU (Normal)
+    else {
+        theIcon = iconNormal;
+    }
+
+                // --- B. LOGIKA SEBARAN LOKASI (SCATTERING GEDONGSARI) ---
+                // Kita gunakan ID atau Index sebagai "Benih" angka acak agar posisi tidak berubah saat diklik
+                const seed = (pasien.id || 0) + index; 
                 
-                // Logika Penempatan (Offset agar tidak tumpuk)
-                const dusunName = pasien.dusun || "DEFAULT";
-                const basePoint = DUSUN_COORDINATES[dusunName] || DUSUN_COORDINATES["DEFAULT"];
-                const radius = 0.00025; 
-                const angle = (index % 8) * (Math.PI / 4); 
-                const layer = Math.floor(index / 8) + 1;
-                
-                const finalLat = basePoint.lat + (Math.sin(angle) * radius * layer);
-                const finalLng = basePoint.lng + (Math.cos(angle) * radius * layer);
+                // Radius Sebaran (Semakin besar angka, semakin luas sebarannya)
+                // 0.003 kira-kira radius 300-400 meter (seukuran desa)
+                const spreadRadius = 0.0035; 
+
+                // Rumus Matematika untuk menyebar titik di sekitar Pusat Gedongsari
+                // Math.sin/cos memastikan penyebaran ke segala arah (360 derajat)
+                const randomLat = Math.sin(seed * 12.9898) * spreadRadius;
+                const randomLng = Math.cos(seed * 78.233) * spreadRadius;
+
+                const finalLat = GEDONGSARI_CENTER[0] + randomLat;
+                const finalLng = GEDONGSARI_CENTER[1] + randomLng;
 
                 return (
                     <Marker key={pasien.id || index} position={[finalLat, finalLng]} icon={theIcon}>
@@ -1951,10 +1948,10 @@ const StuntingMap = ({ data }) => {
                                 <p className="text-xs text-gray-500 mb-2">{pasien.umur} Bulan</p>
                                 
                                 <div className="bg-gray-100 rounded px-2 py-1 mb-2 text-[10px] font-bold text-gray-600 flex items-center justify-center gap-1">
-                                    <MapPin size={10}/> {pasien.dusun || pasien.kelurahan}
+                                    <MapPin size={10}/> {pasien.dusun || "Gedongsari"}
                                 </div>
 
-                                {/* Badge Status di Popup menyesuaikan warna */}
+                                {/* Badge Status */}
                                 <StatusBadge status={pasien.status} />
 
                                 <div className="mt-3 pt-2 border-t border-gray-100 text-xs text-left grid grid-cols-2 gap-1 font-medium text-gray-700">
