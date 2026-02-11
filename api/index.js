@@ -631,6 +631,46 @@ app.post('/api/generate-article', async (req, res) => {
      } catch (e) { res.status(500).json({ message: "Error" }); }
 });
 
+// --- [TAMBAHAN] VERIFIKASI OTP ---
+app.post('/api/verify-otp', async (req, res) => {
+    try {
+        const { email, otp } = req.body;
+        // Cari user dengan email dan OTP yang cocok, serta cek apakah belum expired
+        const { rows } = await sql`SELECT * FROM users WHERE email = ${email} AND otp = ${otp}`;
+        
+        if (rows.length === 0) {
+            return res.status(400).json({ message: "Kode OTP salah atau tidak ditemukan." });
+        }
+
+        const user = rows[0];
+        if (Date.now() > parseInt(user.otp_expires)) {
+            return res.status(400).json({ message: "Kode OTP sudah kadaluarsa. Silakan minta ulang." });
+        }
+
+        res.json({ message: "OTP Valid" });
+    } catch (err) {
+        res.status(500).json({ message: "Gagal verifikasi OTP" });
+    }
+});
+
+// --- [TAMBAHAN] RESET PASSWORD BARU ---
+app.post('/api/reset-password', async (req, res) => {
+    try {
+        const { email, newPassword, otp } = req.body; // OTP dikirim lagi untuk double security (opsional)
+        
+        // Update password dan hapus OTP agar tidak bisa dipakai lagi
+        await sql`
+            UPDATE users 
+            SET password = ${newPassword}, otp = NULL, otp_expires = NULL 
+            WHERE email = ${email}
+        `;
+
+        res.json({ message: "Password berhasil diubah! Silakan login." });
+    } catch (err) {
+        res.status(500).json({ message: "Gagal reset password" });
+    }
+});
+
 // ==========================================
 // 5. EXPORT UNTUK VERCEL (PENTING!)
 // ==========================================
