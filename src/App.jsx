@@ -102,12 +102,64 @@ const getRoleColor = (role) => {
 };
 const getRoleLabel = (role) => { switch(role) { case 'superadmin': return 'Super Admin'; case 'kades': return 'Kepala Desa'; case 'nakes': return 'Tenaga Medis'; case 'ortu': return 'Orang Tua'; default: return 'User'; } };
 
+// --- HELPER EXPORT EXCEL (DIPERBAIKI) ---
 const downloadExcel = (data) => {
   if (!data || data.length === 0) return;
-  const ws = XLSX.utils.json_to_sheet(data);
+
+  // 1. Mapping Data: Memilih kolom yang mau ditampilkan & Rename Header agar rapi
+  const formattedData = data.map((item, index) => ({
+    "No": index + 1,
+    "ID Registrasi": item.idRegistrasi || '-',
+    "Nama Anak": item.nama || item.namaAnak || '-',
+    "Jenis Kelamin": item.gender === 'L' ? 'Laki-laki' : 'Perempuan',
+    "Usia (Bulan)": item.umur || 0,
+    "Tanggal Lahir": item.tglLahir || '-',
+    "Berat Badan (kg)": parseFloat(item.berat) || 0,
+    "Tinggi Badan (cm)": parseFloat(item.tinggi) || 0,
+    "Lingkar Kepala (cm)": parseFloat(item.lk) || 0,
+    "Status Gizi": item.status || 'Belum Ada Data',
+    "Nama Ayah": item.namaAyah || '-',
+    "Nama Ibu": item.namaIbu || '-',
+    "No. HP Ortu": item.hpAyah || item.hpIbu || '-',
+    "Alamat (Dusun)": item.dusun || '-',
+    "Kelurahan": item.kelurahan || '-',
+    "Waktu Input": item.waktuSubmit || '-'
+  }));
+
+  // 2. Membuat Worksheet dari data yang sudah diformat
+  const ws = XLSX.utils.json_to_sheet(formattedData);
+
+  // 3. Mengatur Lebar Kolom (Agar tulisan tidak terpotong)
+  // 'wch' adalah width character count
+  const wscols = [
+    { wch: 5 },  // No
+    { wch: 20 }, // ID Registrasi
+    { wch: 30 }, // Nama Anak
+    { wch: 15 }, // Jenis Kelamin
+    { wch: 12 }, // Usia
+    { wch: 15 }, // Tanggal Lahir
+    { wch: 15 }, // Berat
+    { wch: 15 }, // Tinggi
+    { wch: 18 }, // Lingkar Kepala
+    { wch: 25 }, // Status Gizi
+    { wch: 20 }, // Nama Ayah
+    { wch: 20 }, // Nama Ibu
+    { wch: 15 }, // No HP
+    { wch: 20 }, // Dusun
+    { wch: 20 }, // Kelurahan
+    { wch: 25 }  // Waktu Input
+  ];
+
+  ws['!cols'] = wscols;
+
+  // 4. Membuat Workbook dan Download File
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Data");
-  XLSX.writeFile(wb, "Data_SiGemar.xlsx");
+  XLSX.utils.book_append_sheet(wb, ws, "Data Pasien SiGemar");
+  
+  // Penamaan file dinamis dengan tanggal
+  const fileName = `Laporan_SiGemar_${new Date().toLocaleDateString('id-ID').replace(/\//g, '-')}.xlsx`;
+  
+  XLSX.writeFile(wb, fileName);
 };
 
 // --- FUNGSI MAPPING VISUAL FRONTEND (LOGIC DI BACKEND, STYLE DI SINI) ---
