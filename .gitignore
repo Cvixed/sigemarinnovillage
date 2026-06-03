@@ -21,3 +21,8 @@ yarn-error.log*
 
 # 6. Database Lokal (Jaga-jaga kalau Anda buat lagi)
 database.json
+
+# 7. Dokumen Rahasia (Proposal & User Manual - JANGAN diupload!)
+Proposal Innovillage 2025 (2).pdf
+USER MANUAL - SIGEMAR  (1).pdf
+*.pdf
